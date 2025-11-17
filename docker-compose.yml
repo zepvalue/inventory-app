@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  sveltekit-app:
+    build: .
+    container_name: sveltekit-app
+    ports:
+      - "3000:3000" 
+    env_file:
+      - .env 
+    depends_on:
+      - db 
+    networks:
+      - app-network
+
+  db:
+    image: mysql:8.0 
+    container_name: mysql-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD} 
+      MYSQL_DATABASE: ${MYSQL_DATABASE}       
+      MYSQL_USER: ${MYSQL_USER}               
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}       
+    volumes:
+      - db_data:/var/lib/mysql # Persistent storage for MySQL data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro # Optional: run an init script
+    ports:
+      - "3306:3306" # Expose MySQL port to host (optional, only if you need direct host access)
+    networks:
+      - app-network
+
+volumes:
+  db_data: # Define the named volume for database persistence
+
+networks:
+  app-network:
+    driver: bridge # Create a custom network for containers to communicate

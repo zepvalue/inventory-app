@@ -1,0 +1,39 @@
+# Node.js specific
+node_modules/
+npm-debug.log
+.yarn/
+yarn-error.log
+.pnp.cjs
+.pnp.js
+
+# SvelteKit specific
+.svelte-kit/
+.svelte-kit-prerender/ # Optional: if you generate prerendered files during dev/build that you don't need in production
+build/                # This is crucial! The 'build' output is generated *inside*                the container during the Docker build process.
+                      # You do NOT need to copy your local 'build' folder into the Docker build context.
+
+# Environment variables (SECURITY CRITICAL!)
+.env                  # Your local .env file. Never include sensitive info in the image.
+.env.* # More general patterns for various .env files (e.g., .env.development)
+*.env                 # Even more general pattern for any file ending with .env
+
+# Git specific
+.git/                 # The entire Git repository history
+.gitignore            # Your Git ignore file
+.gitattributes
+.gitmodules
+
+# IDE/Editor specific configuration files
+.vscode/              # Visual Studio Code configurations
+.idea/                # IntelliJ IDEA / WebStorm configurations
+*.sublime-project     # Sublime Text project files
+*.sublime-workspace   # Sublime Text workspace files
+
+# System specific files (macOS, Windows, Linux)
+.DS_Store             # macOS specific metadata files
+Thumbs.db             # Windows thumbnail cache
+
+# Logs and temporary files
+*.log                 # Any files ending with .log
+tmp/                  # Temporary directories
+temp/                 # Another common temporary directory
