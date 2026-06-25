@@ -8,7 +8,6 @@ NPM ?= npm
 
 .PHONY: help install dev build preview check lint format test test-watch \
         test-coverage verify ci clean \
-        docker-build docker-up docker-down docker-logs \
         mobile-add-ios mobile-add-android mobile-sync mobile-ios mobile-android \
         backend-install backend-dev backend-build backend-test
 
@@ -52,20 +51,6 @@ ci: install verify build ## Full CI flow: install, verify, build
 
 clean: ## Remove build output and caches
 	rm -rf build .svelte-kit node_modules/.vite
-
-# --- Docker ---------------------------------------------------------------
-
-docker-build: ## Build the Docker image
-	docker compose build
-
-docker-up: ## Start the app via docker compose
-	docker compose up -d
-
-docker-down: ## Stop docker compose
-	docker compose down
-
-docker-logs: ## Tail container logs
-	docker compose logs -f
 
 # --- Mobile (Capacitor) ---------------------------------------------------
 # One-time: run mobile-add-ios / mobile-add-android to scaffold native projects.
