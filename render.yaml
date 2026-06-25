@@ -1,0 +1,38 @@
+# Render Blueprint — deploys the backend API and the static frontend together.
+# Use it: push to GitHub, then Render Dashboard → New → Blueprint → pick this repo.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  # --- Backend API (Express) ----------------------------------------------
+  - type: web
+    name: inventory-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /up
+    envVars:
+      - key: DEMO_EMAIL
+        sync: false # set in the dashboard
+      - key: DEMO_PASSWORD
+        sync: false # set in the dashboard
+      # Lock CORS to the frontend origin in production (the static site URL below).
+      - key: CORS_ORIGINS
+        sync: false
+
+  # --- Frontend (SvelteKit static SPA) ------------------------------------
+  - type: web
+    name: inventory-frontend
+    runtime: static
+    plan: free
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    envVars:
+      # The backend's public URL, e.g. https://inventory-backend.onrender.com
+      - key: PUBLIC_API_BASE
+        sync: false
+    routes:
+      # SPA fallback: every path serves index.html so client-side routing works.
+      - type: rewrite
+        source: /*
+        destination: /index.html

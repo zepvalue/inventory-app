@@ -1,39 +1,53 @@
-export async function loginWithSanctum(email: string, password: string) {
+import { apiUrl } from '$lib/config';
+import { apiFetch } from './http';
+import { setToken, clearToken } from './auth-token';
+
+export interface LoginResult {
+	success: boolean;
+	message?: string;
+}
+
+/**
+ * Bearer-token login: POST credentials, store the returned token. Every
+ * subsequent request authenticates via that token (see apiFetch). No cookies,
+ * no CSRF — identical behaviour in the browser PWA and the Capacitor app.
+ */
+export async function login(email: string, password: string): Promise<LoginResult> {
 	try {
-		// 1. Get CSRF cookie
-		await fetch('http://localhost:8000/sanctum/csrf-cookie', {
-			credentials: 'include'
-		});
-
-		// 2. Get token from cookie
-		const xsrfToken = document.cookie
-			.split('; ')
-			.find((row) => row.startsWith('XSRF-TOKEN='))
-			?.split('=')[1];
-
-		if (!xsrfToken) {
-			return { success: false, message: 'CSRF token not found' };
-		}
-
-		// 3. Login
-		const res = await fetch('http://localhost:8000/login', {
+		const res = await fetch(apiUrl('/api/login'), {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/x-www-form-urlencoded',
-				'X-XSRF-TOKEN': decodeURIComponent(xsrfToken)
-			},
-			body: new URLSearchParams({ email, password }),
-			credentials: 'include'
+			headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+			body: JSON.stringify({ email, password })
 		});
 
 		if (!res.ok) {
-			const errText = await res.text();
-			return { success: false, message: errText || 'Login failed' };
+			let message = 'Invalid email or password';
+			try {
+				const data = await res.json();
+				if (data?.message) message = data.message;
+			} catch {
+				/* non-JSON error body — keep the default message */
+			}
+			return { success: false, message };
 		}
 
+		const data = await res.json();
+		if (!data?.token) return { success: false, message: 'No token returned by the server' };
+
+		setToken(data.token);
 		return { success: true };
-	} catch (err: any) {
+	} catch (err) {
 		console.error(err);
 		return { success: false, message: 'Unexpected error during login' };
 	}
+}
+
+/** Revoke the token server-side (best effort) and clear it locally. */
+export async function logout(): Promise<void> {
+	try {
+		await apiFetch('/logout', { method: 'POST' });
+	} catch {
+		/* offline — clear locally anyway */
+	}
+	clearToken();
 }

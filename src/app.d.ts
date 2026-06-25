@@ -11,4 +11,3 @@ declare global {
 }
 
 export {};
-declare module 'quagga';

@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import devtoolsJson from 'vite-plugin-devtools-json';
@@ -7,6 +8,8 @@ export default defineConfig({
         sveltekit(),
         devtoolsJson()
     ],
+    // Expose PUBLIC_-prefixed env vars on import.meta.env (in addition to VITE_).
+    envPrefix: ['VITE_', 'PUBLIC_'],
     server: {
         // This setting is correct for running behind a proxy.
         host: true,
@@ -24,5 +27,10 @@ export default defineConfig({
         allowedHosts: [
             'test.inventory.online'
         ],
+    },
+    test: {
+        environment: 'jsdom',
+        globals: true,
+        include: ['src/**/*.{test,spec}.{js,ts}']
     }
 });

@@ -1,8 +1,16 @@
 <script lang="ts">
 	// --- IMPORTS ---
-	import { tick } from 'svelte';
-	// NOTE: Your Item type now needs 'photos' and 'category'
-	import type { Item } from '$lib/types';
+	import { tick, onMount } from 'svelte';
+	import { dbService, type Item } from '$lib/services/db';
+	import {
+		sync,
+		queueSync,
+		initSync,
+		online,
+		syncing,
+		pendingCount,
+		lastSyncError
+	} from '$lib/services/sync';
 
 	// --- CONSTANTS ---
 	const categories = [
@@ -16,12 +24,20 @@
 	let formMode = $state<'create' | 'edit'>('create');
 	let selectedItem = $state<Item | null>(null);
 	let formData = $state<Item | null>(null);
-	let isSyncingAll = $state(false);
 	let showMenu = $state(false);
 
-	let itemsToSyncCount = $derived(
-		items.filter((i) => i.syncStatus === 'local' || i.syncStatus === 'error').length
-	);
+	// Reload the on-screen list from the local (offline-first) database.
+	async function refresh() {
+		items = await dbService.getAllItems();
+	}
+
+	// Show local data instantly, then start the sync engine. It pushes pending
+	// changes and pulls server changes whenever a connection is available (on load,
+	// on reconnect, and after edits); refresh() re-renders when that completes.
+	onMount(() => {
+		refresh();
+		return initSync(refresh);
+	});
 
 	// ... other state variables
 	let modalBackdrop = $state<HTMLElement | null>(null);
@@ -48,7 +64,7 @@
 	// This effect regenerates the SKU whenever the category changes in the form for a NEW item
 	$effect(() => {
 		if (formData && formMode === 'create') {
-			formData.sku = generateSku(formData.category);
+			formData.sku = generateSku(formData.category ?? '');
 		}
 	});
 
@@ -61,26 +77,11 @@
 	}
 
 	// --- DATA HANDLING ---
+	// The Refresh button triggers a full sync (push pending + pull server), then
+	// re-renders from the local store.
 	async function fetchItems() {
-		try {
-			const response = await fetch('https://inventory.online/api/v1/items');
-			if (!response.ok) throw new Error('Failed to fetch');
-			const serverResponse = await response.json();
-			let serverItems = [];
-			if (Array.isArray(serverResponse)) {
-				serverItems = serverResponse;
-			} else if (serverResponse && typeof serverResponse === 'object') {
-				serverItems = [serverResponse];
-			}
-			items = serverItems.map((item: Item) => ({
-				...item,
-				photos: item.photos || [],
-				syncStatus: 'synced'
-			}));
-		} catch (error) {
-			console.error('Fetch error:', error);
-			alert('Could not load inventory from the server.');
-		}
+		await sync();
+		await refresh();
 	}
 
 	// --- CSV & DOWNLOAD ---
@@ -134,7 +135,7 @@
 		if (!file) return;
 
 		const reader = new FileReader();
-		reader.onload = (e) => {
+		reader.onload = async (e) => {
 			const text = e.target?.result as string;
 			if (!text) return;
 			try {
@@ -142,27 +143,28 @@
 				if (lines.length < 2) return;
 
 				const headers = parseCsvRow(lines[0]).map((h) => h.trim().toLowerCase());
-				const importedItems: Item[] = [];
+				const importedItems: Partial<Item>[] = [];
 				for (let i = 1; i < lines.length; i++) {
 					const values = parseCsvRow(lines[i]);
 					const itemData: any = {};
 					headers.forEach((key, index) => (itemData[key] = values[index] || ''));
-					
+
 					importedItems.push({
-						id: -Date.now() + i,
 						name: itemData.name,
 						sku: itemData.sku,
 						barcode: itemData.barcode || '',
 						description: itemData.description || '',
 						category: itemData.category || categories[0],
 						is_active: String(itemData.is_active).toLowerCase() === 'true',
-						photos: itemData.photos ? itemData.photos.split(';') : [],
-						syncStatus: 'local'
+						photos: itemData.photos ? itemData.photos.split(';') : []
 					});
 				}
-				items = importedItems;
+				// Save locally first (offline-first), then let the sync engine push them.
+				await dbService.bulkCreate(importedItems);
+				await refresh();
+				queueSync(refresh);
 				alert(
-					`Successfully imported ${importedItems.length} items. Use the 'Sync All' button to save them to the database.`
+					`Imported ${importedItems.length} items locally. They will sync automatically when online.`
 				);
 			} catch (error) {
 				console.error('Error parsing CSV:', error);
@@ -181,60 +183,18 @@
 	}
 
 	// --- DATABASE SYNC ---
+	// All syncing is handled centrally by the sync engine; these just trigger it and
+	// re-render. The engine pushes every pending/error item and pulls server changes.
 	async function syncAllItems() {
-		const itemsToSync = items.filter(
-			(item) => item.syncStatus === 'local' || item.syncStatus === 'error'
-		);
-		if (itemsToSync.length === 0) return alert('Everything is already up-to-date.');
-		isSyncingAll = true;
-		let successCount = 0;
-		let errorCount = 0;
-		for (const item of itemsToSync) {
-			try {
-				await syncItem(item);
-				successCount++;
-			} catch (e) {
-				errorCount++;
-			}
-		}
-		isSyncingAll = false;
-		alert(`Sync complete! ${successCount} items synced, ${errorCount} items failed.`);
+		if ($pendingCount === 0) return alert('Everything is already up-to-date.');
+		await sync();
+		await refresh();
+		alert($lastSyncError ? `Sync finished with errors: ${$lastSyncError}` : 'Sync complete!');
 	}
 
-	async function syncItem(itemToSync: Item) {
-		const itemIndex = items.findIndex((i) => i.id === itemToSync.id);
-		if (itemIndex === -1) throw new Error('Item not found');
-
-		items[itemIndex].syncStatus = 'pending';
-		items = [...items];
-
-		const isNewOnServer = itemToSync.id < 0;
-		const url = isNewOnServer
-			? 'https://inventory.online/api/v1/items'
-			: `https://inventory.online/api/v1/items/${itemToSync.id}`;
-		const method = isNewOnServer ? 'POST' : 'PUT';
-
-		try {
-			const payload = { ...itemToSync };
-			if (isNewOnServer) delete payload.id;
-
-			const response = await fetch(url, {
-				method,
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload)
-			});
-			if (!response.ok) throw new Error('Server request failed');
-
-			const savedItem = await response.json();
-
-			items[itemIndex] = { ...savedItem, photos: savedItem.photos || [], syncStatus: 'synced' };
-			items = [...items];
-		} catch (error) {
-			console.error('Sync error:', error);
-			items[itemIndex].syncStatus = 'error';
-			items = [...items];
-			throw error;
-		}
+	async function syncItem(_item: Item) {
+		await sync();
+		await refresh();
 	}
 
 	// --- LOCAL CRUD & Other Handlers ---
@@ -243,42 +203,32 @@
 		if (!formData) return;
 		if (!formData.name || !formData.sku) return alert('Item Name and SKU are required.');
 
+		// Save locally first; the sync engine pushes it when a connection is available.
 		if (formMode === 'create') {
-			const newItem = { ...formData, id: -Date.now(), syncStatus: 'local' as const };
-			items = [...items, newItem];
-		} else {
-			const index = items.findIndex((i) => i.id === formData!.id);
-			if (index !== -1) {
-				items[index] = { ...formData, syncStatus: 'local' };
-				items = [...items];
-			}
+			await dbService.create(formData);
+		} else if (formData.id != null) {
+			await dbService.update(formData.id, formData);
 		}
+		await refresh();
+		queueSync(refresh);
 		handleCancel();
 	}
 
 	async function executeDelete() {
-		if (!itemToDelete) return;
-		const { id, syncStatus } = itemToDelete;
-
-		if (id > 0 && (syncStatus === 'synced' || syncStatus === 'error')) {
-			try {
-				const response = await fetch(`https://inventory.online/api/v1/items/${id}`, {
-					method: 'DELETE'
-				});
-				if (!response.ok) throw new Error('Server delete failed');
-			} catch (error) {
-				alert('Failed to delete item from server. It will be removed locally.');
-			}
-		}
-		items = items.filter((i) => i.id !== id);
+		if (!itemToDelete || itemToDelete.id == null) return;
+		// Soft-delete locally (or drop outright if it never reached the server); the
+		// sync engine sends the DELETE to the backend when online.
+		await dbService.remove(itemToDelete.id);
+		await refresh();
+		queueSync(refresh);
 		itemToDelete = null;
 	}
 
 	async function handleNew() {
 		formMode = 'create';
 		const defaultCategory = categories[0];
-		const newItem = {
-			id: -1,
+		const newItem: Item = {
+			serverId: null,
 			name: '',
 			sku: generateSku(defaultCategory),
 			barcode: '',
@@ -286,7 +236,8 @@
 			category: defaultCategory,
 			is_active: true,
 			photos: [],
-			syncStatus: 'local' as const
+			syncStatus: 'pending',
+			lastModified: 0
 		};
 		selectedItem = newItem;
 		formData = { ...newItem };
@@ -689,20 +640,36 @@
 
 <div class="app-container">
 	<header class="top-bar">
-		<h1>Inventory</h1>
+		<div style="display:flex; align-items:center; gap:8px;">
+			<h1>Inventory</h1>
+			<span
+				class="status-chip {!$online ? 'error' : $syncing ? 'pending' : $pendingCount > 0 ? 'local' : 'synced'}"
+				title={$lastSyncError ?? ''}
+			>
+				{#if !$online}
+					Offline
+				{:else if $syncing}
+					Syncing…
+				{:else if $pendingCount > 0}
+					{$pendingCount} pending
+				{:else}
+					Synced
+				{/if}
+			</span>
+		</div>
 		<div class="top-bar-actions">
-			<button onclick={fetchItems} class="btn-icon" aria-label="Refresh items">
+			<button onclick={fetchItems} class="btn-icon" aria-label="Refresh items" disabled={$syncing}>
 				<i class="material-icons">refresh</i>
 			</button>
 			<button
 				class="btn btn-filled"
 				onclick={syncAllItems}
-				disabled={itemsToSyncCount === 0 || isSyncingAll}
+				disabled={$pendingCount === 0 || $syncing}
 			>
-				{#if isSyncingAll}
+				{#if $syncing}
 					Syncing...
 				{:else}
-					Sync All ({itemsToSyncCount})
+					Sync All ({$pendingCount})
 				{/if}
 			</button>
 			<div class="dropdown">
@@ -741,7 +708,7 @@
 						<div class="item-card-header">
 							<h3>{item.name}</h3>
 							<div class="item-card-actions">
-								{#if item.syncStatus === 'local' || item.syncStatus === 'error'}
+								{#if item.syncStatus === 'pending' || item.syncStatus === 'error'}
 									<button class="btn-icon" onclick={() => syncItem(item)} aria-label="Sync Item">
 										<i class="material-icons" style={item.syncStatus === 'error' ? 'color: var(--md-sys-color-error)' : ''}>sync</i>
 									</button>
@@ -753,7 +720,7 @@
 						<div class="item-card-body">
 							<div><p class="label">SKU</p><p class="value">{item.sku || 'N/A'}</p></div>
 							<div><p class="label">Category</p><p class="value">{item.category || 'N/A'}</p></div>
-							<div class="full-width"><p class="label">Sync Status</p><p><span class="status-chip {item.syncStatus ?? 'local'}">{item.syncStatus ?? 'local'}</span></p></div>
+							<div class="full-width"><p class="label">Sync Status</p><p><span class="status-chip {item.syncStatus ?? 'pending'}">{item.syncStatus ?? 'pending'}</span></p></div>
 							<div class="full-width"><p class="label">Photos</p>
 								{#if item.photos && item.photos.length > 0}
 									<div class="photo-gallery">
