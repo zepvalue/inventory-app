@@ -26,11 +26,11 @@ Inventory is a **mobile-first, offline-first** app for tracking physical items. 
 It's built as a **SvelteKit SPA** wrapped in **Capacitor** for native iOS and Android, backed by an Express API you can host anywhere.
 
 <div align="center">
-<img src="docs/screenshots/Screenshot%202026-06-25%20at%206.18.40PM.png" width="250" alt="Inventory Dashboard"/>
+<img src="docs/screenshots/dashboard.png" width="250" alt="Inventory Dashboard"/>
 &nbsp;&nbsp;&nbsp;
-<img src="docs/screenshots/Screenshot%202026-06-25%20at%206.18.49%E2%80%AFPM.png" width="250" alt="Add Item Form"/>
+<img src="docs/screenshots/add_item_form.png" width="250" alt="Add Item Form"/>
 &nbsp;&nbsp;&nbsp;
-<img src="docs/screenshots/Screenshot%202026-06-25%20at%206.19.07%E2%80%AFPM.png" width="250" alt="Item Detail View"/>
+<img src="docs/screenshots/item_detail_view.png" width="250" alt="Item Detail View"/>
 </div>
 
 ---
