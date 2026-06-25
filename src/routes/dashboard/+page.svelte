@@ -1,6 +1,7 @@
 <script lang="ts">
 	// --- IMPORTS ---
 	import { tick, onMount } from 'svelte';
+	import { fly, fade } from 'svelte/transition';
 	import { dbService, type Item } from '$lib/services/db';
 	import {
 		sync,
@@ -454,6 +455,16 @@
 			justify-content: center;
 			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 			cursor: pointer;
+			transition: transform 150ms ease, box-shadow 150ms ease;
+			animation: fabPulse 6s ease-in-out infinite;
+		}
+		.fab:hover {
+			transform: scale(1.08);
+			box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+		}
+		.fab:active {
+			transform: scale(0.94);
+			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 		}
 		.item-card {
 			background-color: var(--md-sys-color-surface);
@@ -461,6 +472,15 @@
 			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 			padding: 16px;
 			margin-bottom: 12px;
+			transition: transform 200ms ease, box-shadow 200ms ease;
+		}
+		.item-card:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+		}
+		.item-card:active {
+			transform: translateY(0);
+			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 		}
 		.item-card-header {
 			display: flex;
@@ -559,6 +579,14 @@
 		@keyframes pulse {
 			0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; }
 		}
+		@keyframes fabPulse {
+			0%, 100% { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); }
+			50% { box-shadow: 0 4px 16px rgba(103, 80, 164, 0.4); }
+		}
+		@keyframes spin {
+			from { transform: rotate(0deg); }
+			to { transform: rotate(360deg); }
+		}
 		.modal-backdrop {
 			position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.5);
 			display: flex; align-items: center; justify-content: center;
@@ -588,13 +616,23 @@
 			padding: 10px 20px; border-radius: 20px; border: none;
 			font-weight: 500; text-transform: uppercase; cursor: pointer;
 		}
-		.btn-text { background: none; color: var(--md-sys-color-primary); }
-		.btn-filled { background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+		.btn-text { background: none; color: var(--md-sys-color-primary); transition: background-color 150ms ease; }
+		.btn-text:hover { background-color: rgba(103, 80, 164, 0.08); }
+		.btn-filled { background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); transition: box-shadow 150ms ease, transform 100ms ease; }
+		.btn-filled:hover:not(:disabled) { box-shadow: 0 2px 8px rgba(103, 80, 164, 0.35); }
+		.btn-filled:active:not(:disabled) { transform: scale(0.97); }
 		.btn-filled:disabled { background-color: #e0e0e0; color: #9e9e9e; cursor: not-allowed; }
 		.btn-icon {
 			display: inline-flex; align-items: center; justify-content: center;
 			width: 40px; height: 40px; padding: 0; border-radius: 50%;
 			border: none; background: none; cursor: pointer; color: var(--md-sys-color-on-surface-variant);
+			transition: background-color 150ms ease, transform 100ms ease;
+		}
+		.btn-icon:hover {
+			background-color: rgba(0, 0, 0, 0.06);
+		}
+		.btn-icon:active {
+			transform: scale(0.9);
 		}
 		#scanner-container {
 			width: 100%; height: 250px; position: relative; background-color: #000;
@@ -631,6 +669,7 @@
 			padding: 8px 16px;
 			cursor: pointer;
 			color: var(--md-sys-color-on-surface);
+			transition: background-color 120ms ease;
 		}
 		.dropdown-item:hover {
 			background-color: rgba(0,0,0,0.05);
@@ -659,7 +698,7 @@
 		</div>
 		<div class="top-bar-actions">
 			<button onclick={fetchItems} class="btn-icon" aria-label="Refresh items" disabled={$syncing}>
-				<i class="material-icons">refresh</i>
+				<i class="material-icons" style={$syncing ? 'animation: spin 1s linear infinite;' : ''}>refresh</i>
 			</button>
 			<button
 				class="btn btn-filled"
@@ -677,7 +716,7 @@
 					<i class="material-icons">more_vert</i>
 				</button>
 				{#if showMenu}
-					<div class="dropdown-menu">
+					<div class="dropdown-menu" transition:fly={{ y: -8, x: 8, duration: 150 }}>
 						<label for="csv-import" class="dropdown-item">
 							<i class="material-icons">upload</i>
 							<span>Import CSV</span>
@@ -704,7 +743,7 @@
 		{:else}
 			<div class="items-list">
 				{#each items as item (item.id)}
-					<div class="item-card">
+					<div class="item-card" in:fly={{ y: 20, duration: 250, delay: Math.min(200, 30) }}>
 						<div class="item-card-header">
 							<h3>{item.name}</h3>
 							<div class="item-card-actions">
@@ -749,10 +788,10 @@
 	</button>
 
 	{#if selectedItem && formData}
-		<div bind:this={modalBackdrop} class="modal-backdrop" role="dialog" tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') handleCancel(); }}>
+		<div bind:this={modalBackdrop} class="modal-backdrop" role="dialog" tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') handleCancel(); }} transition:fade={{ duration: 150 }}>
 			<div class="modal-content">
 				{#if showCamera}
-					<h2 class="modal-header">Take Photo</h2>
+					<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>Take Photo</h2>
 					<!-- svelte-ignore a11y-media-has-caption -->
 					<video bind:this={videoElement} autoplay playsinline class="w-full rounded-md bg-black"></video>
 					<canvas bind:this={canvasElement} style="display: none;"></canvas>
@@ -761,11 +800,11 @@
 						<button type="button" onclick={capturePhoto} class="btn btn-filled">Capture</button>
 					</div>
 				{:else if showScanner}
-					<h2 class="modal-header">Scan Barcode</h2>
+					<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>Scan Barcode</h2>
 					<div bind:this={scannerContainer} id="scanner-container"></div>
 					<div class="modal-actions"><button class="btn btn-text" onclick={() => { showScanner = false; stopScanner(); }}>Cancel</button></div>
 				{:else}
-					<h2 class="modal-header">{formMode === 'create' ? 'Add New Item' : 'Edit Item'}</h2>
+					<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>{formMode === 'create' ? 'Add New Item' : 'Edit Item'}</h2>
 					<form onsubmit={handleSubmit}>
 						<div class="form-field">
 							<label for="category">Category</label>

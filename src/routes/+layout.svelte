@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { browser } from '$app/environment';
+    import { MdTheme } from '$lib/components';
 
     onMount(() => {
         // This check ensures the code only runs in the browser, not on the server.
@@ -20,9 +21,12 @@
     <!-- This links your manifest file to the application -->
     <link rel="manifest" href="/manifest.json" />
     <!-- This sets the theme color for the browser UI on mobile -->
-    <meta name="theme-color" content="#4f46e5" />
+    <meta name="theme-color" content="#6750a4" />
 </svelte:head>
 
+<MdTheme>
 <!-- The <slot /> tag is where your page content (like +page.svelte) will be rendered. -->
 <slot />
+</MdTheme>
+
 

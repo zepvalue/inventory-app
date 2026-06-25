@@ -223,8 +223,10 @@ the phone's browser (same Wi-Fi). The Vite server already binds all interfaces.
 
 ## 12. Git workflow
 
+- **NEVER run git commands. Always provide the exact commands for the user to run
+  themselves** — staging, committing, branching, pushing, tagging, everything.
 - Branch from `main`; `main` stays deployable. Branch names: `feat/…`, `fix/…`, `chore/…`.
-- Commit or push **only when asked**. Keep commits atomic — one logical change each.
+- Keep commits atomic — one logical change each.
 - Never commit `.env`, build artifacts (`build/`, `dist/`), or `node_modules`.
 - Before opening a PR, run the quality gates: `make verify` (test + check + lint).
 

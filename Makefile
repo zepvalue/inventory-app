@@ -6,7 +6,7 @@ NPM ?= npm
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build preview check lint format test test-watch \
+.PHONY: help install dev dev-all build preview check lint format test test-watch \
         test-coverage verify ci clean \
         mobile-add-ios mobile-add-android mobile-sync mobile-ios mobile-android \
         backend-install backend-dev backend-build backend-test
@@ -18,8 +18,16 @@ help: ## Show this help
 install: ## Install dependencies (clean, reproducible)
 	$(NPM) ci
 
-dev: ## Run the dev server (hot reload)
+dev: ## Run the frontend dev server (hot reload)
 	$(NPM) run dev
+
+dev-all: ## Run frontend + backend concurrently (Ctrl-C kills both)
+	@trap 'kill 0' EXIT; \
+		echo "Starting backend (http://localhost:8000) …"; \
+		cd backend && $(NPM) run dev & \
+		echo "Starting frontend (http://localhost:5173) …"; \
+		$(NPM) run dev & \
+		wait
 
 build: ## Production build
 	$(NPM) run build
