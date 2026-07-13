@@ -1,22 +1,28 @@
-# Render Blueprint — deploys the static SvelteKit SPA. The online store is now
-# Convex (deployed separately with `npx convex deploy`, not on Render).
+# Render Blueprint — serves the static SvelteKit SPA. The online store is Convex,
+# which runs on Convex's own cloud (NOT on Render). One build command both deploys
+# the Convex functions to your PROD deployment and builds the frontend with the
+# prod Convex URL inlined.
+#
 # Use it: push to GitHub, then Render Dashboard → New → Blueprint → pick this repo.
-# Docs: https://render.com/docs/blueprint-spec
+# Before the first deploy, set CONVEX_DEPLOY_KEY in the Render dashboard (generate
+# it at Convex dashboard → Project → Settings → Generate Production Deploy Key).
+# Docs: https://render.com/docs/blueprint-spec · https://docs.convex.dev/production/hosting/
 services:
   # --- Frontend (SvelteKit static SPA) ------------------------------------
   - type: web
     name: inventory-frontend
     runtime: static
     plan: free
-    # PUBLIC_ vars are inlined at build time, so build AFTER deploying Convex and
-    # set PUBLIC_CONVEX_URL below. `convex deploy` can also run the frontend build:
-    #   buildCommand: npx convex deploy --cmd 'npm install && npm run build'
-    buildCommand: npm install && npm run build
+    # `convex deploy` pushes functions to the prod deployment (keyed by
+    # CONVEX_DEPLOY_KEY), then runs --cmd with PUBLIC_CONVEX_URL set to that
+    # deployment's URL — so the Vite build inlines the right URL automatically.
+    buildCommand: npm install && npx convex deploy --cmd 'npm run build' --cmd-url-env-var-name PUBLIC_CONVEX_URL
     staticPublishPath: build
     envVars:
-      # Your Convex production deployment URL (https://<name>-<id>.convex.cloud).
-      - key: PUBLIC_CONVEX_URL
+      # Secret. From Convex dashboard → Settings → Generate Production Deploy Key.
+      - key: CONVEX_DEPLOY_KEY
         sync: false
+      # NOTE: do NOT set PUBLIC_CONVEX_URL here — the build command injects it.
     routes:
       # SPA fallback: every path serves index.html so client-side routing works.
       - type: rewrite
