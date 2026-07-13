@@ -15,32 +15,32 @@
   to be, the files you'll touch, any risks or tradeoffs, and your chosen approach.
 - Flag tech debt when you see it. You don't have to fix it immediately, but name it.
 - Surface decisions you made and why — don't hide them in the diff.
-- Avoid `any`. The frontend `tsconfig` is strict; the backend is `strict: true`.
+- Avoid `any`. TypeScript is strict everywhere (frontend `tsconfig` and `convex/`).
 - Write or update tests as part of every task, not as an afterthought.
 
 ---
 
 ## 2. Project overview
 
-**Product:** A mobile-first inventory management app. Users sign in, then manage
-inventory items (SKU, name, barcode, description, active flag). Items are scanned
-via the device camera, stored offline on-device, and synced to a backend API.
+**Product:** A mobile-first inventory management app. Users manage inventory items
+(SKU, name, barcode, description, active flag). Items are scanned via the device
+camera, stored offline on-device, and synced to **Convex** (the online store).
 
 **Shape:** A SvelteKit single-page app wrapped with **Capacitor** so the same web
 build ships as a native iOS/Android app.
 
-> ⚠️ **Migration in progress — Convex backend (Phase 1).** The online store is now
-> **Convex** (`convex/` dir), not the old Express API (removed). The offline-first
-> Dexie layer is unchanged; the sync engine pushes/pulls through `src/lib/convex.ts`.
-> **Auth is deferred (Phase 2):** the login gate is off and Convex item functions are
-> currently **unauthenticated**. Sections below that mention Express/bearer-token/
-> Sanctum describe the pre-migration state and are being updated. Provision with
-> `npx convex dev`; set `PUBLIC_CONVEX_URL`.
+> ℹ️ **Backend is Convex** (functions in `convex/`, running on Convex's cloud). It
+> replaced the old Express API, which has been removed. The offline-first Dexie
+> layer is unchanged; the sync engine pushes/pulls through `src/lib/convex.ts`.
+> **Auth is deferred (Phase 2):** there's no login gate and the Convex item
+> functions are currently **unauthenticated** — anyone with the deployment URL can
+> read/write. Provision a deployment with `npx convex dev`; the frontend reads
+> `PUBLIC_CONVEX_URL`.
 
 **Key characteristics:**
-- **Offline-first** — items live in IndexedDB (Dexie) and sync to the server.
+- **Offline-first** — items live in IndexedDB (Dexie) and sync to Convex.
 - **Barcode scanning** — camera-based, runs in the WebView (works in browser too).
-- **Cookie-based auth** — mirrors Laravel Sanctum's SPA flow.
+- **No auth yet** — deferred to Phase 2 (was bearer-token against Express).
 
 ---
 
@@ -50,26 +50,30 @@ build ships as a native iOS/Android app.
 inventory-app/
 ├── src/                         SvelteKit frontend (package name: inventory-mobile)
 │   ├── lib/
-│   │   ├── api/auth.ts          Sanctum login flow (CSRF cookie → login)
+│   │   ├── convex.ts            The Convex seam — listItems/createItem/updateItem/removeItem
+│   │   ├── api/auth.ts          Login/logout (DEFERRED — unused until Phase 2 auth)
+│   │   ├── api/http.ts          apiFetch chokepoint (DEFERRED — used only by auth.ts now)
 │   │   ├── components/          BarcodeScanner, Dashboard, ItemForm (Svelte 5)
-│   │   ├── services/db.ts       Dexie (IndexedDB) store + server sync — `dbService` singleton
-│   │   ├── stores/csrf.ts       Svelte stores for CSRF state
-│   │   └── config.ts            API_BASE + apiUrl() — reads PUBLIC_API_BASE
-│   └── routes/                  SvelteKit pages (login, dashboard, …)
-├── backend/                     Express/TypeScript API (package name: inventory-backend)
-│   ├── src/app.ts               All routes (auth + items)
-│   ├── src/store.ts             In-memory item store (swap for a real DB later)
-│   └── src/types.ts             Shared types
+│   │   ├── services/db.ts       Dexie (IndexedDB) store — `dbService` singleton
+│   │   ├── services/sync.ts     Sync engine — pushes/pulls via src/lib/convex.ts
+│   │   ├── services/sync-logic.ts  Pure reconcile helpers (unit-tested)
+│   │   └── config.ts            apiUrl()/API_BASE (DEFERRED — only the auth flow uses it)
+│   └── routes/                  SvelteKit pages (dashboard, login, …)
+├── convex/                      Convex backend (runs on Convex cloud)
+│   ├── schema.ts                `items` table definition
+│   ├── items.ts                 list/create/update/remove functions
+│   └── _generated/              Convex codegen (created by `npx convex dev`)
 ├── static/                      Static assets served as-is
 ├── build/                       adapter-static output → Capacitor `webDir`
 ├── capacitor.config.ts          appId online.inventory.app, webDir 'build'
 ├── svelte.config.js             adapter-static, SPA mode (fallback index.html)
 ├── vite.config.ts               host:true, PUBLIC_ env prefix, vitest config
+├── render.yaml                  Render Blueprint (static frontend + convex deploy)
 └── Makefile                     Convenience targets (see `make help`)
 ```
 
-**Two npm packages, two `package.json`s:** the frontend at the repo root and the
-backend under `backend/`. They are installed and run independently.
+**One npm package** at the repo root. Convex functions live in `convex/` and are
+pushed to Convex's cloud by the Convex CLI, not bundled by Vite.
 
 ---
 
@@ -83,50 +87,47 @@ backend under `backend/`. They are installed and run independently.
 | Offline storage | Dexie (IndexedDB) |
 | Barcode scanning | `@zxing/browser`, `@zxing/library`, `quagga` |
 | CSV import/export | `papaparse` |
-| Backend | Express 4 + TypeScript (ESM), in-memory store |
-| Auth | Bearer token (login returns a token; sent as `Authorization: Bearer`) |
-| Testing | Vitest (frontend: jsdom; backend: + supertest) |
+| Backend | Convex (functions in `convex/`, hosted on Convex cloud) |
+| Auth | None yet — deferred to Phase 2 (Convex functions are unauthenticated) |
+| Testing | Vitest (jsdom) |
 | Lint / format | ESLint 9 + Prettier |
-| Hosting | Backend on Render (`inventory-app-2aqa.onrender.com`) |
+| Hosting | Frontend: Render static site (`render.yaml`) · Backend: Convex cloud |
 
 ---
 
-## 5. Backend API contract
+## 5. Backend contract (Convex)
 
-The frontend depends on the exact shapes the backend returns — treat these as a
-public API. Routes live in [`backend/src/app.ts`](backend/src/app.ts); full table
-in [`backend/README.md`](backend/README.md).
+The sync engine depends on the exact shapes the Convex functions return — treat
+these as a public API. Functions live in [`convex/items.ts`](convex/items.ts); the
+frontend calls them only through the seam in [`src/lib/convex.ts`](src/lib/convex.ts)
+(`listItems` / `createItem` / `updateItem` / `removeItem`).
 
-- `POST /login` / `POST /api/login` → JSON or form `{ email, password }`. Returns
-  `{ token, user }` on success, `422` on bad credentials.
-- `POST /logout` → revokes the bearer token (`204`).
-- `GET /api/v1/items` → `{ data: Item[] }` (list is wrapped; single/create/update are bare).
-- `GET|PUT|PATCH|DELETE /api/v1/items/:id`, `POST /api/v1/items` → bare `Item`.
-- **All `/api/v1/items*` routes require `Authorization: Bearer <token>`** (401 otherwise).
+- `items.list` (query) → all item docs (the pull).
+- `items.create` (mutation) → inserts, returns the new doc — the frontend maps
+  `_id` onto its local `serverId`.
+- `items.update` (mutation) → full replace of the editable fields, returns the doc.
+- `items.remove` (mutation) → hard delete by `_id`.
 
-`Item = { id, sku, name, barcode, description, is_active }` (plus optional fields).
-Validation failures return Laravel-style `{ message, errors }` with `422`.
+The item fields are defined once in [`convex/schema.ts`](convex/schema.ts)
+(`itemFields`): `{ sku, name, barcode, description, category?, photos, is_active }`.
+Convex supplies `_id` and `_creationTime`; there is no separate `id` column.
+Argument validation is Convex validators (`v.*`) — invalid args are rejected
+before the handler runs.
 
-**The in-memory store resets on restart.** When persistence is needed, swap
-`backend/src/store.ts` for a real DB — keep the function signatures so callers
-don't change.
+**These functions are unauthenticated (Phase 1).** Anyone with the deployment URL
+can read/write. Gating them on a session is the Phase 2 auth pass.
 
 ---
 
-## 6. Auth flow (bearer token)
+## 6. Auth (deferred to Phase 2)
 
-1. `POST /api/login` with `{ email, password }`.
-2. Store the returned `token` (localStorage today — see
-   [`src/lib/api/auth-token.ts`](src/lib/api/auth-token.ts)).
-3. Every request attaches `Authorization: Bearer <token>`.
-
-All of this funnels through **one chokepoint**,
-[`apiFetch`](src/lib/api/http.ts) — login/logout live in
-[`src/lib/api/auth.ts`](src/lib/api/auth.ts). No cookies and no CSRF, so it works
-identically in the browser PWA and the Capacitor WebView, and **cross-domain
-deploys (static frontend + separate API) just work**. To change auth strategy,
-touch `apiFetch` + `auth.ts` and nothing else. The backend stores tokens
-in-memory, so they reset on restart (swap for JWTs/DB for persistence).
+There is currently **no login gate**. The old bearer-token flow against Express is
+retired, but its frontend plumbing is kept for the Phase 2 auth pass:
+[`src/lib/api/auth.ts`](src/lib/api/auth.ts) (login/logout),
+[`src/lib/api/auth-token.ts`](src/lib/api/auth-token.ts) (localStorage token), and
+the [`apiFetch`](src/lib/api/http.ts) chokepoint. None of it is exercised by the
+item flow anymore — items go through `src/lib/convex.ts`. When Phase 2 lands,
+either wire these to Convex auth or delete them.
 
 ---
 
@@ -150,15 +151,17 @@ item `pending`/`deleted` so the next sync retries it.
 
 ## 8. Configuration & environments
 
-- The API base URL is **never hardcoded** — use `apiUrl(path)` /`API_BASE` from
-  [`src/lib/config.ts`](src/lib/config.ts).
-- Set it via `PUBLIC_API_BASE` in `.env` (Vite inlines `PUBLIC_`-prefixed vars at
-  build time). Falls back to the hosted Render URL when unset.
-  - Local backend: `PUBLIC_API_BASE=http://localhost:8000`
-  - Hosted: `PUBLIC_API_BASE=https://inventory-app-2aqa.onrender.com`
-- Backend config (`DEMO_EMAIL`, `DEMO_PASSWORD`, `CORS_ORIGINS`, `PORT`) — see
-  [`backend/.env.example`](backend/.env.example).
-- **Never commit `.env`.** Commit `.env.example` (no secrets) instead.
+- The Convex deployment URL comes from **`PUBLIC_CONVEX_URL`** (Vite inlines
+  `PUBLIC_`-prefixed vars at build time). Locally, `npx convex dev` provisions a
+  dev deployment and writes the URL to `.env.local`; in production, the Render
+  build injects it via `npx convex deploy --cmd-url-env-var-name PUBLIC_CONVEX_URL`
+  (see [`render.yaml`](render.yaml)).
+- `CONVEX_DEPLOY_KEY` is a **build-time secret** set in the Render dashboard
+  (never committed, never shipped to the browser) — it lets the build push the
+  `convex/` functions to the prod deployment.
+- `PUBLIC_API_BASE` / [`src/lib/config.ts`](src/lib/config.ts) are **deferred** —
+  only the unused Phase 2 auth flow reads them. See [`.env.example`](.env.example).
+- **Never commit `.env` / `.env.local`.** Commit `.env.example` (no secrets) instead.
 
 ---
 
@@ -176,12 +179,10 @@ npm run format       # prettier --write
 npm test             # vitest run
 ```
 
-**Backend (`cd backend`):**
+**Backend (Convex, repo root):**
 ```bash
-npm run dev          # tsx watch, http://localhost:8000
-npm run build        # tsc → dist/
-npm start            # run compiled dist/
-npm test             # vitest + supertest (covers every route)
+npx convex dev       # provision/watch a dev deployment; pushes convex/ on change
+npx convex deploy    # push functions to the prod deployment (CI does this)
 ```
 
 **Mobile (Capacitor) — Xcode + CocoaPods (iOS) / Android Studio + JDK (Android):**
@@ -193,38 +194,39 @@ npm run cap:ios              # build, sync, open Xcode
 npm run cap:android          # build, sync, open Android Studio
 ```
 
-**Testing on a phone over Wi-Fi (no native build):** run `npm run dev`, point
-`PUBLIC_API_BASE` at a reachable backend, and open `http://<mac-lan-ip>:5173` in
-the phone's browser (same Wi-Fi). The Vite server already binds all interfaces.
+**Testing on a phone over Wi-Fi (no native build):** run `npm run dev` (with
+`npx convex dev` running so `PUBLIC_CONVEX_URL` is set) and open
+`http://<mac-lan-ip>:5173` in the phone's browser (same Wi-Fi). The Vite server
+already binds all interfaces, and Convex is reachable from anywhere.
 
 ---
 
 ## 10. Testing
 
-- Frontend tests run under **jsdom** (`vite.config.ts`); files match
-  `src/**/*.{test,spec}.{js,ts}` (e.g. `src/lib/api/auth.test.ts`,
-  `src/lib/stores/csrf.test.ts`).
-- Backend tests use **vitest + supertest** against the Express app
-  (`backend/src/app.test.ts`) — exercise routes, status codes, and response shapes.
-- A change to the API contract (route, status code, or response shape) must update
-  **both** the backend tests and any frontend code/tests that depend on it.
-- Don't test third-party internals (Dexie, Express), pixel positions, or things
+- Tests run under **jsdom** (`vite.config.ts`); files match
+  `src/**/*.{test,spec}.{js,ts}` — e.g. the pure sync-reconcile helpers in
+  `src/lib/services/sync-logic.ts`.
+- A change to the Convex function contract (names, args, or return shapes in
+  `convex/items.ts`) must update **both** the seam in `src/lib/convex.ts` and any
+  sync code/tests that depend on it.
+- Don't test third-party internals (Dexie, Convex), pixel positions, or things
   the type system already guarantees.
 
 ---
 
 ## 11. Architecture & conventions
 
-- **No hardcoded URLs** — always go through `apiUrl()`.
+- **No hardcoded URLs** — the Convex URL comes from `PUBLIC_CONVEX_URL` via
+  [`src/lib/convex.ts`](src/lib/convex.ts); nothing else should construct backend URLs.
+- **No direct Convex calls from components** — go through the `src/lib/convex.ts` seam.
 - **No direct Dexie access from components** — go through `dbService`.
 - Keep the frontend a pure SPA: `adapter-static` with `fallback: index.html` means
   there is **no server-side rendering or server routes** in the SvelteKit app. Don't
   add `+page.server.ts` / `+server.ts` logic that assumes a Node server at runtime.
 - Components are **Svelte 5** — use runes (`$state`, `$derived`, `$props`) for new code.
-- Backend is **ESM TypeScript** — relative imports use the `.js` extension
-  (e.g. `import { store } from './store.js'`), required by Node ESM resolution.
-- Validate external input on the backend and return Laravel-style `422` error shapes
-  so the frontend's existing error handling keeps working.
+- Convex functions validate their args with **Convex validators** (`v.*` from
+  `convex/values`) — define shared field shapes once in `convex/schema.ts`
+  (`itemFields`) and reuse them in function args.
 
 ---
 
@@ -242,7 +244,7 @@ the phone's browser (same Wi-Fi). The Vite server already binds all interfaces.
 ## 13. When unsure
 
 1. **Read this file first.** The answer is probably here.
-2. Check [`backend/src/app.ts`](backend/src/app.ts) / [`backend/README.md`](backend/README.md)
+2. Check [`convex/items.ts`](convex/items.ts) / [`src/lib/convex.ts`](src/lib/convex.ts)
    before changing anything that crosses the frontend↔backend boundary.
 3. Check [`src/lib/services/db.ts`](src/lib/services/db.ts) before touching offline/sync logic.
 4. For mobile/native behaviour, check [`capacitor.config.ts`](capacitor.config.ts) and the

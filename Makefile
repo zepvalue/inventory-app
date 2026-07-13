@@ -9,7 +9,7 @@ NPM ?= npm
 .PHONY: help install dev dev-all build preview check lint format test test-watch \
         test-coverage verify ci clean \
         mobile-add-ios mobile-add-android mobile-sync mobile-ios mobile-android \
-        backend-install backend-dev backend-build backend-test
+        convex-dev convex-deploy
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -21,10 +21,10 @@ install: ## Install dependencies (clean, reproducible)
 dev: ## Run the frontend dev server (hot reload)
 	$(NPM) run dev
 
-dev-all: ## Run frontend + backend concurrently (Ctrl-C kills both)
+dev-all: ## Run frontend + Convex dev deployment concurrently (Ctrl-C kills both)
 	@trap 'kill 0' EXIT; \
-		echo "Starting backend (http://localhost:8000) …"; \
-		cd backend && $(NPM) run dev & \
+		echo "Starting Convex dev (pushes convex/ on change) …"; \
+		npx convex dev & \
 		echo "Starting frontend (http://localhost:5173) …"; \
 		$(NPM) run dev & \
 		wait
@@ -79,16 +79,10 @@ mobile-ios: ## Build, sync, and open the iOS project in Xcode
 mobile-android: ## Build, sync, and open the Android project in Android Studio
 	$(NPM) run cap:android
 
-# --- Backend (TypeScript API in ./backend) --------------------------------
+# --- Backend (Convex functions in ./convex) --------------------------------
 
-backend-install: ## Install backend dependencies
-	cd backend && $(NPM) install
+convex-dev: ## Provision/watch a dev deployment; pushes convex/ on change
+	npx convex dev
 
-backend-dev: ## Run the backend API locally (http://localhost:8000)
-	cd backend && $(NPM) run dev
-
-backend-build: ## Compile the backend to dist/
-	cd backend && $(NPM) run build
-
-backend-test: ## Run the backend test suite
-	cd backend && $(NPM) test
+convex-deploy: ## Push convex/ functions to the prod deployment
+	npx convex deploy
