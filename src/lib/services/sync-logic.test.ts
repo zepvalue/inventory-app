@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { planReconcile, toPayload, fromServer, type ServerItem } from './sync-logic';
+import {
+	planReconcile,
+	toPayload,
+	fromServer,
+	shouldMarkErrorOnFailedPush,
+	type ServerItem
+} from './sync-logic';
 import type { Item } from './db';
 
 const NOW = 1_700_000_000_000;
@@ -21,12 +27,14 @@ function local(partial: Partial<Item>): Item {
 }
 
 function server(partial: Partial<ServerItem>): ServerItem {
-	return { id: 100, sku: 'SKU', name: 'Name', ...partial };
+	return { id: 'k100', sku: 'SKU', name: 'Name', ...partial };
 }
 
 describe('toPayload', () => {
 	it('drops local-only bookkeeping fields', () => {
-		const payload = toPayload(local({ id: 5, serverId: 9, syncStatus: 'pending', lastModified: 42 }));
+		const payload = toPayload(
+			local({ id: 5, serverId: 'k9', syncStatus: 'pending', lastModified: 42 })
+		);
 		expect(payload).not.toHaveProperty('id');
 		expect(payload).not.toHaveProperty('serverId');
 		expect(payload).not.toHaveProperty('syncStatus');
@@ -37,9 +45,9 @@ describe('toPayload', () => {
 
 describe('fromServer', () => {
 	it('produces a synced local record with no local id', () => {
-		const rec = fromServer(server({ id: 7, name: 'Drill' }), NOW);
+		const rec = fromServer(server({ id: 'k7', name: 'Drill' }), NOW);
 		expect(rec).not.toHaveProperty('id');
-		expect(rec.serverId).toBe(7);
+		expect(rec.serverId).toBe('k7');
 		expect(rec.name).toBe('Drill');
 		expect(rec.syncStatus).toBe('synced');
 		expect(rec.lastModified).toBe(NOW);
@@ -48,16 +56,16 @@ describe('fromServer', () => {
 
 describe('planReconcile', () => {
 	it('inserts server items with no local match', () => {
-		const plan = planReconcile([], [server({ id: 100 })], NOW);
+		const plan = planReconcile([], [server({ id: 'k100' })], NOW);
 		expect(plan.toInsert).toHaveLength(1);
-		expect(plan.toInsert[0].serverId).toBe(100);
+		expect(plan.toInsert[0].serverId).toBe('k100');
 		expect(plan.toUpdate).toHaveLength(0);
 		expect(plan.toDelete).toHaveLength(0);
 	});
 
 	it('refreshes a synced local item from its server match', () => {
-		const items = [local({ id: 1, serverId: 100, name: 'old', syncStatus: 'synced' })];
-		const plan = planReconcile(items, [server({ id: 100, name: 'new' })], NOW);
+		const items = [local({ id: 1, serverId: 'k100', name: 'old', syncStatus: 'synced' })];
+		const plan = planReconcile(items, [server({ id: 'k100', name: 'new' })], NOW);
 		expect(plan.toUpdate).toHaveLength(1);
 		expect(plan.toUpdate[0].id).toBe(1);
 		expect(plan.toUpdate[0].changes.name).toBe('new');
@@ -65,15 +73,15 @@ describe('planReconcile', () => {
 	});
 
 	it('never overwrites a local item with unsynced changes', () => {
-		const items = [local({ id: 1, serverId: 100, name: 'mine', syncStatus: 'pending' })];
-		const plan = planReconcile(items, [server({ id: 100, name: 'theirs' })], NOW);
+		const items = [local({ id: 1, serverId: 'k100', name: 'mine', syncStatus: 'pending' })];
+		const plan = planReconcile(items, [server({ id: 'k100', name: 'theirs' })], NOW);
 		expect(plan.toUpdate).toHaveLength(0);
 		expect(plan.toInsert).toHaveLength(0);
 		expect(plan.toDelete).toHaveLength(0);
 	});
 
 	it('deletes a synced local item the server no longer has', () => {
-		const items = [local({ id: 1, serverId: 100, syncStatus: 'synced' })];
+		const items = [local({ id: 1, serverId: 'k100', syncStatus: 'synced' })];
 		const plan = planReconcile(items, [], NOW);
 		expect(plan.toDelete).toEqual([1]);
 	});
@@ -83,5 +91,19 @@ describe('planReconcile', () => {
 		const plan = planReconcile(items, [], NOW);
 		expect(plan.toDelete).toHaveLength(0);
 		expect(plan.toUpdate).toHaveLength(0);
+	});
+});
+
+describe('shouldMarkErrorOnFailedPush', () => {
+	it('keeps a failed delete as-is so the next sync retries the DELETE', () => {
+		// Flipping 'deleted' -> 'error' would resurface the item and re-push it as
+		// an update, silently resurrecting an item the user deleted.
+		expect(shouldMarkErrorOnFailedPush('deleted')).toBe(false);
+	});
+
+	it('marks a failed create/update as error', () => {
+		expect(shouldMarkErrorOnFailedPush('pending')).toBe(true);
+		expect(shouldMarkErrorOnFailedPush('error')).toBe(true);
+		expect(shouldMarkErrorOnFailedPush('synced')).toBe(true);
 	});
 });

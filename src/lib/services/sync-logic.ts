@@ -1,11 +1,24 @@
 // Pure, side-effect-free sync helpers. Kept separate from db.ts/sync.ts so the
 // tricky reconciliation logic can be unit-tested without IndexedDB or the network.
 
-import type { Item } from './db';
+import type { Item, SyncStatus } from './db';
 
-/** The item shape the backend returns (see backend/src/types.ts). */
+/**
+ * After a push to the server fails, decide whether to flip the item to 'error'.
+ * A 'deleted' item must stay 'deleted' so the next sync retries the DELETE —
+ * flipping it to 'error' would resurface it in the list and re-push it as an
+ * update, silently resurrecting an item the user deleted.
+ */
+export function shouldMarkErrorOnFailedPush(status: SyncStatus): boolean {
+	return status !== 'deleted';
+}
+
+/**
+ * The item shape the online store returns. `id` is Convex's string document id
+ * (`_id`), mapped in src/lib/convex.ts before it reaches this layer.
+ */
 export interface ServerItem {
-	id: number;
+	id: string;
 	sku: string;
 	name: string;
 	barcode?: string;
@@ -15,16 +28,20 @@ export interface ServerItem {
 	photos?: string[];
 }
 
-/** Strip local-only bookkeeping fields before sending an item to the server. */
+/**
+ * Strip local-only bookkeeping fields before sending an item to the server.
+ * barcode/description/photos are always sent (Convex requires them); category
+ * is optional.
+ */
 export function toPayload(item: Item) {
 	return {
 		sku: item.sku,
 		name: item.name,
-		barcode: item.barcode,
-		description: item.description,
+		barcode: item.barcode ?? '',
+		description: item.description ?? '',
 		is_active: item.is_active,
-		...(item.category !== undefined ? { category: item.category } : {}),
-		...(item.photos !== undefined ? { photos: item.photos } : {})
+		photos: item.photos ?? [],
+		...(item.category !== undefined ? { category: item.category } : {})
 	};
 }
 
@@ -60,12 +77,12 @@ export interface ReconcilePlan {
  *  - local item with serverId === null (an outgoing create) -> never pruned
  */
 export function planReconcile(local: Item[], server: ServerItem[], now: number): ReconcilePlan {
-	const localByServerId = new Map<number, Item>();
+	const localByServerId = new Map<string, Item>();
 	for (const l of local) {
 		if (l.serverId != null) localByServerId.set(l.serverId, l);
 	}
 
-	const serverIds = new Set<number>();
+	const serverIds = new Set<string>();
 	const toInsert: Omit<Item, 'id'>[] = [];
 	const toUpdate: { id: number; changes: Omit<Item, 'id'> }[] = [];
 

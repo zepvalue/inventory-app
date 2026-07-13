@@ -18,8 +18,8 @@ export type SyncStatus =
 export interface Item {
 	/** Local primary key (Dexie auto-increment). Stable across syncs. */
 	id?: number;
-	/** The server's id once created remotely; null until the first create syncs. */
-	serverId: number | null;
+	/** Convex's document id once created remotely; null until the first create syncs. */
+	serverId: string | null;
 	sku: string;
 	name: string;
 	barcode: string;
@@ -43,15 +43,22 @@ class InventoryDB extends Dexie {
 	}
 }
 
-/** Normalise arbitrary input down to the editable item fields. */
-function fields(data: Partial<Item>) {
+/**
+ * Normalise arbitrary input down to the editable item fields.
+ *
+ * `data` often comes straight from a Svelte 5 `$state` form object, whose arrays
+ * are reactive Proxies. IndexedDB's structured-clone can't clone a Proxy (throws
+ * DataCloneError), so `photos` is spread into a fresh plain array before it's
+ * handed to Dexie. The other fields are primitives and clone fine.
+ */
+export function fields(data: Partial<Item>) {
 	return {
 		sku: data.sku ?? '',
 		name: data.name ?? '',
 		barcode: data.barcode ?? '',
 		description: data.description ?? '',
 		category: data.category,
-		photos: data.photos ?? [],
+		photos: data.photos ? [...data.photos] : [],
 		is_active: data.is_active ?? true
 	};
 }
@@ -126,7 +133,7 @@ class DatabaseService {
 
 	// --- Used by the sync engine ----------------------------------------
 
-	async markSynced(id: number, serverId: number): Promise<void> {
+	async markSynced(id: number, serverId: string): Promise<void> {
 		if (!browser) return;
 		await this.db.items.update(id, { serverId, syncStatus: 'synced' });
 	}

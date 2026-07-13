@@ -1,12 +1,12 @@
-// The sync engine. Pushes pending local changes to the backend and pulls server
-// changes back, automatically, whenever a connection is available — on app load,
-// on the browser `online` event, and (debounced) after local edits.
+// The sync engine. Pushes pending local changes to Convex (the online store) and
+// pulls server changes back, automatically, whenever a connection is available —
+// on app load, on the browser `online` event, and (debounced) after local edits.
 
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { dbService } from './db';
-import { toPayload, type ServerItem } from './sync-logic';
-import { apiFetch } from '$lib/api/http';
+import { toPayload, shouldMarkErrorOnFailedPush } from './sync-logic';
+import { listItems, createItem, updateItem, removeItem } from '$lib/convex';
 
 /** Reactive status for the UI. */
 export const online = writable<boolean>(browser ? navigator.onLine : true);
@@ -29,30 +29,21 @@ async function pushPending(): Promise<boolean> {
 		if (item.id == null) continue;
 		try {
 			if (item.syncStatus === 'deleted') {
-				if (item.serverId != null) {
-					const res = await apiFetch(`/api/v1/items/${item.serverId}`, { method: 'DELETE' });
-					if (!res.ok && res.status !== 404) throw new Error(`delete failed (${res.status})`);
-				}
+				// Convex remove is idempotent — deleting an already-gone id is a no-op.
+				if (item.serverId != null) await removeItem(item.serverId);
 				await dbService.hardDelete(item.id);
 			} else if (item.serverId == null) {
-				const res = await apiFetch('/api/v1/items', {
-					method: 'POST',
-					body: JSON.stringify(toPayload(item))
-				});
-				if (!res.ok) throw new Error(`create failed (${res.status})`);
-				const saved = await res.json();
+				const saved = await createItem(toPayload(item));
 				await dbService.markSynced(item.id, saved.id);
 			} else {
-				const res = await apiFetch(`/api/v1/items/${item.serverId}`, {
-					method: 'PUT',
-					body: JSON.stringify(toPayload(item))
-				});
-				if (!res.ok) throw new Error(`update failed (${res.status})`);
+				await updateItem(item.serverId, toPayload(item));
 				await dbService.markSynced(item.id, item.serverId);
 			}
 		} catch (e) {
 			hadError = true;
-			await dbService.markError(item.id);
+			// A failed delete must stay 'deleted' so the next sync retries the DELETE
+			// (see shouldMarkErrorOnFailedPush) instead of resurrecting the item.
+			if (shouldMarkErrorOnFailedPush(item.syncStatus)) await dbService.markError(item.id);
 			lastSyncError.set(e instanceof Error ? e.message : 'Push failed');
 		}
 	}
@@ -60,16 +51,9 @@ async function pushPending(): Promise<boolean> {
 	return hadError;
 }
 
-/** Pull the server's items and merge them into the local store. */
+/** Pull Convex's items and merge them into the local store. */
 async function pullFromServer(): Promise<void> {
-	const res = await apiFetch('/api/v1/items', { method: 'GET' });
-	if (!res.ok) throw new Error(`fetch failed (${res.status})`);
-	const body = await res.json();
-	const serverItems: ServerItem[] = Array.isArray(body)
-		? body
-		: Array.isArray(body?.data)
-			? body.data
-			: [];
+	const serverItems = await listItems();
 	await dbService.applyReconcile(serverItems);
 }
 

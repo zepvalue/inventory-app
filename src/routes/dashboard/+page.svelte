@@ -866,4 +866,31 @@
 			</div>
 		</div>
 	{/if}
+
+	{#if itemToDelete}
+		<div
+			bind:this={deleteModalBackdrop}
+			class="modal-backdrop"
+			role="dialog"
+			tabindex="-1"
+			onkeydown={(e) => {
+				if (e.key === 'Escape') itemToDelete = null;
+			}}
+			transition:fade={{ duration: 150 }}
+		>
+			<div class="modal-content">
+				<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>Delete Item</h2>
+				<p>Delete <strong>{itemToDelete.name || 'this item'}</strong>? This can't be undone.</p>
+				<div class="modal-actions">
+					<button type="button" onclick={() => (itemToDelete = null)} class="btn btn-text">Cancel</button>
+					<button
+						type="button"
+						onclick={executeDelete}
+						class="btn btn-filled"
+						style="background: var(--md-sys-color-error); color: white;">Delete</button
+					>
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>

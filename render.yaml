@@ -1,35 +1,21 @@
-# Render Blueprint — deploys the backend API and the static frontend together.
+# Render Blueprint — deploys the static SvelteKit SPA. The online store is now
+# Convex (deployed separately with `npx convex deploy`, not on Render).
 # Use it: push to GitHub, then Render Dashboard → New → Blueprint → pick this repo.
 # Docs: https://render.com/docs/blueprint-spec
 services:
-  # --- Backend API (Express) ----------------------------------------------
-  - type: web
-    name: inventory-backend
-    runtime: node
-    rootDir: backend
-    plan: free
-    buildCommand: npm install && npm run build
-    startCommand: npm start
-    healthCheckPath: /up
-    envVars:
-      - key: DEMO_EMAIL
-        sync: false # set in the dashboard
-      - key: DEMO_PASSWORD
-        sync: false # set in the dashboard
-      # Lock CORS to the frontend origin in production (the static site URL below).
-      - key: CORS_ORIGINS
-        sync: false
-
   # --- Frontend (SvelteKit static SPA) ------------------------------------
   - type: web
     name: inventory-frontend
     runtime: static
     plan: free
+    # PUBLIC_ vars are inlined at build time, so build AFTER deploying Convex and
+    # set PUBLIC_CONVEX_URL below. `convex deploy` can also run the frontend build:
+    #   buildCommand: npx convex deploy --cmd 'npm install && npm run build'
     buildCommand: npm install && npm run build
     staticPublishPath: build
     envVars:
-      # The backend's public URL, e.g. https://inventory-backend.onrender.com
-      - key: PUBLIC_API_BASE
+      # Your Convex production deployment URL (https://<name>-<id>.convex.cloud).
+      - key: PUBLIC_CONVEX_URL
         sync: false
     routes:
       # SPA fallback: every path serves index.html so client-side routing works.

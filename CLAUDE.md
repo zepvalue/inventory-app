@@ -27,8 +27,15 @@ inventory items (SKU, name, barcode, description, active flag). Items are scanne
 via the device camera, stored offline on-device, and synced to a backend API.
 
 **Shape:** A SvelteKit single-page app wrapped with **Capacitor** so the same web
-build ships as a native iOS/Android app. A small **Express/TypeScript** backend
-implements the API contract the frontend expects.
+build ships as a native iOS/Android app.
+
+> ⚠️ **Migration in progress — Convex backend (Phase 1).** The online store is now
+> **Convex** (`convex/` dir), not the old Express API (removed). The offline-first
+> Dexie layer is unchanged; the sync engine pushes/pulls through `src/lib/convex.ts`.
+> **Auth is deferred (Phase 2):** the login gate is off and Convex item functions are
+> currently **unauthenticated**. Sections below that mention Express/bearer-token/
+> Sanctum describe the pre-migration state and are being updated. Provision with
+> `npx convex dev`; set `PUBLIC_CONVEX_URL`.
 
 **Key characteristics:**
 - **Offline-first** — items live in IndexedDB (Dexie) and sync to the server.
