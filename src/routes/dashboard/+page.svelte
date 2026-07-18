@@ -3,6 +3,7 @@
 	import { tick, onMount } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
 	import { dbService, type Item } from '$lib/services/db';
+	import { compressImage } from '$lib/services/image';
 	import {
 		sync,
 		queueSync,
@@ -38,6 +39,19 @@
 	onMount(() => {
 		refresh();
 		return initSync(refresh);
+	});
+
+	// Alert on sync failures even when they happen in the background (e.g. the
+	// debounced sync after a save, or a reconnect sync) — lastSyncError otherwise
+	// only surfaces as a tooltip on the status chip, easy to miss. Gated on the
+	// message changing so a repeated/unresolved error doesn't re-alert every
+	// retry.
+	let lastAlertedSyncError = $state<string | null>(null);
+	$effect(() => {
+		if ($lastSyncError && $lastSyncError !== lastAlertedSyncError) {
+			lastAlertedSyncError = $lastSyncError;
+			alert(`Sync finished with errors: ${$lastSyncError}`);
+		}
 	});
 
 	// ... other state variables
@@ -176,6 +190,13 @@
 		target.value = '';
 	}
 
+	// `photos[i]` is a `data:` URL (not yet synced) or a Convex storage id
+	// (synced, not directly displayable) — resolve to whatever's renderable.
+	function photoSrc(photos: string[], photoUrls: string[] | undefined, index: number): string {
+		const photo = photos[index];
+		return photo?.startsWith('data:') ? photo : (photoUrls?.[index] ?? '');
+	}
+
 	function downloadPhoto(dataUrl: string, sku: string, index: number) {
 		const link = document.createElement('a');
 		link.href = dataUrl;
@@ -190,7 +211,7 @@
 		if ($pendingCount === 0) return alert('Everything is already up-to-date.');
 		await sync();
 		await refresh();
-		alert($lastSyncError ? `Sync finished with errors: ${$lastSyncError}` : 'Sync complete!');
+		if (!$lastSyncError) alert('Sync complete!');
 	}
 
 	async function syncItem(_item: Item) {
@@ -248,7 +269,7 @@
 
 	async function handleEdit(item: Item) {
 		formMode = 'edit';
-		selectedItem = { ...item, photos: item.photos || [] };
+		selectedItem = { ...item, photos: item.photos || [], photoUrls: item.photoUrls || [] };
 		formData = { ...selectedItem };
 		await tick();
 		modalBackdrop?.focus();
@@ -288,16 +309,18 @@
 		showCamera = false;
 	}
 
-	function capturePhoto() {
+	async function capturePhoto() {
 		if (!videoElement || !canvasElement || !formData) return;
 		canvasElement.width = videoElement.videoWidth;
 		canvasElement.height = videoElement.videoHeight;
 		const context = canvasElement.getContext('2d');
 		if (context) {
 			context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-			const photoDataUrl = canvasElement.toDataURL('image/jpeg');
-			formData.photos.push(photoDataUrl);
-			formData.photos = [...formData.photos];
+			const photoDataUrl = await compressImage(canvasElement.toDataURL('image/jpeg'));
+			if (formData) {
+				formData.photos.push(photoDataUrl);
+				formData.photos = [...formData.photos];
+			}
 		}
 		stopCamera();
 	}
@@ -306,6 +329,10 @@
 		if (formData) {
 			formData.photos.splice(indexToRemove, 1);
 			formData.photos = [...formData.photos];
+			if (formData.photoUrls) {
+				formData.photoUrls.splice(indexToRemove, 1);
+				formData.photoUrls = [...formData.photoUrls];
+			}
 		}
 	}
 
@@ -326,9 +353,10 @@
 			}
 
 			const reader = new FileReader();
-			reader.onload = () => {
+			reader.onload = async () => {
+				const compressed = await compressImage(reader.result as string);
 				if (formData) {
-					formData.photos.push(reader.result as string);
+					formData.photos.push(compressed);
 					formData.photos = [...formData.photos];
 				}
 			};
@@ -765,8 +793,8 @@
 									<div class="photo-gallery">
 										{#each item.photos as photo, i}
 											<div class="thumbnail">
-												<img src={photo} alt="{item.name} preview {i + 1}" />
-												<button class="btn-icon" style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.5);" onclick={() => downloadPhoto(photo, item.sku, i)}>
+												<img src={photoSrc(item.photos, item.photoUrls, i)} alt="{item.name} preview {i + 1}" />
+												<button class="btn-icon" style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.5);" onclick={() => downloadPhoto(photoSrc(item.photos, item.photoUrls, i), item.sku, i)}>
 													<i class="material-icons" style="color:white; font-size:16px;">download</i>
 												</button>
 											</div>
@@ -831,7 +859,7 @@
 							<div class="photo-gallery">
 								{#each formData.photos as photo, index}
 									<div class="thumbnail">
-										<img src={photo} alt={`Preview ${index + 1}`} />
+										<img src={photoSrc(formData.photos, formData.photoUrls, index)} alt={`Preview ${index + 1}`} />
 										<button type="button" class="remove-btn" onclick={() => removePhoto(index)}>&times;</button>
 									</div>
 								{/each}

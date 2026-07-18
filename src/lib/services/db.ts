@@ -25,7 +25,10 @@ export interface Item {
 	barcode: string;
 	description: string;
 	category?: string;
+	/** A `data:` URL while pending sync, a Convex storage id once synced. */
 	photos: string[];
+	/** Display cache for already-synced `photos` entries — index-aligned, shorter than `photos` while newer entries are still pending upload. */
+	photoUrls?: string[];
 	is_active: boolean;
 	syncStatus: SyncStatus;
 	lastModified: number;
@@ -59,6 +62,7 @@ export function fields(data: Partial<Item>) {
 		description: data.description ?? '',
 		category: data.category,
 		photos: data.photos ? [...data.photos] : [],
+		photoUrls: data.photoUrls ? [...data.photoUrls] : [],
 		is_active: data.is_active ?? true
 	};
 }

@@ -23,4 +23,13 @@ describe('fields', () => {
 		expect(out.photos).toEqual([]);
 		expect(() => structuredClone(out)).not.toThrow();
 	});
+
+	it('clones photoUrls into a fresh plain array and defaults to empty when absent', () => {
+		const reactive = new Proxy(['https://x/a.jpg'], {});
+		const out = fields({ name: 'Widget', photoUrls: reactive });
+		expect(out.photoUrls).not.toBe(reactive);
+		expect(out.photoUrls).toEqual(['https://x/a.jpg']);
+
+		expect(fields({ name: 'Widget' }).photoUrls).toEqual([]);
+	});
 });

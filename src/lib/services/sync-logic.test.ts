@@ -52,6 +52,20 @@ describe('fromServer', () => {
 		expect(rec.syncStatus).toBe('synced');
 		expect(rec.lastModified).toBe(NOW);
 	});
+
+	it('carries photos (storage ids) and photoUrls (display cache) through separately', () => {
+		const rec = fromServer(
+			server({ photos: ['storage1'], photoUrls: ['https://example.convex.cloud/storage1'] }),
+			NOW
+		);
+		expect(rec.photos).toEqual(['storage1']);
+		expect(rec.photoUrls).toEqual(['https://example.convex.cloud/storage1']);
+	});
+
+	it('defaults photoUrls to an empty array when absent', () => {
+		const rec = fromServer(server({}), NOW);
+		expect(rec.photoUrls).toEqual([]);
+	});
 });
 
 describe('planReconcile', () => {

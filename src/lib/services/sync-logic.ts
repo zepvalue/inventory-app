@@ -25,7 +25,10 @@ export interface ServerItem {
 	description?: string;
 	is_active?: boolean;
 	category?: string;
+	/** Convex File Storage ids — not directly displayable, see `photoUrls`. */
 	photos?: string[];
+	/** Servable URLs resolved from `photos` (only populated on the pull). */
+	photoUrls?: string[];
 }
 
 /**
@@ -55,6 +58,7 @@ export function fromServer(s: ServerItem, now: number): Omit<Item, 'id'> {
 		description: s.description ?? '',
 		category: s.category,
 		photos: s.photos ?? [],
+		photoUrls: s.photoUrls ?? [],
 		is_active: s.is_active ?? true,
 		syncStatus: 'synced',
 		lastModified: now
