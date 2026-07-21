@@ -19,13 +19,27 @@ import type { Id } from './_generated/dataModel';
 // limit. `list` additionally resolves those ids to servable `photoUrls` for
 // display; `update`/`remove` delete storage files that fall out of the item
 // so replacing/removing a photo doesn't leak storage.
+//
+// Items synced before this feature landed have raw base64 strings in `photos`
+// instead of storage ids — ctx.storage.getUrl/delete throw on those ("Invalid
+// storage id"), so every lookup below is defensive per-entry: one legacy/bad
+// id is skipped rather than failing the whole query/mutation.
 
 async function resolvePhotoUrls(
 	ctx: { storage: { getUrl: (id: Id<'_storage'>) => Promise<string | null> } },
 	photos: string[]
 ) {
-	const urls = await Promise.all(photos.map((id) => ctx.storage.getUrl(id as Id<'_storage'>)));
+	const urls = await Promise.all(
+		photos.map((id) => ctx.storage.getUrl(id as Id<'_storage'>).catch(() => null))
+	);
 	return urls.filter((url): url is string => url !== null);
+}
+
+async function deletePhotos(
+	ctx: { storage: { delete: (id: Id<'_storage'>) => Promise<void> } },
+	photos: string[]
+) {
+	await Promise.all(photos.map((id) => ctx.storage.delete(id as Id<'_storage'>).catch(() => {})));
 }
 
 export const generateUploadUrl = mutation({
@@ -63,9 +77,9 @@ export const update = mutation({
 		await ctx.db.replace(id, fields);
 		if (existing) {
 			const kept = new Set(fields.photos);
-			const orphaned = existing.photos.filter((p) => !kept.has(p));
-			await Promise.all(
-				orphaned.map((storageId) => ctx.storage.delete(storageId as Id<'_storage'>))
+			await deletePhotos(
+				ctx,
+				existing.photos.filter((p) => !kept.has(p))
 			);
 		}
 		return await ctx.db.get(id);
@@ -77,9 +91,7 @@ export const remove = mutation({
 	handler: async (ctx, { id }) => {
 		const existing = await ctx.db.get(id);
 		if (existing) {
-			await Promise.all(
-				existing.photos.map((storageId) => ctx.storage.delete(storageId as Id<'_storage'>))
-			);
+			await deletePhotos(ctx, existing.photos);
 		}
 		await ctx.db.delete(id);
 	}
