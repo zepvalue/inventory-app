@@ -91,6 +91,26 @@ export function buildPhotoManifest(
 	};
 }
 
+/**
+ * Photo links keyed by sku, for the SQL export's `photo_urls` column.
+ *
+ * Built from the same live Convex pull as the manifest, so the URLs are freshly
+ * resolved. Items without resolvable photos are absent from the map, which the
+ * export writes as NULL.
+ */
+export function buildPhotoUrlIndex(serverItems: ServerItem[]): Map<string, string[]> {
+	const index = new Map<string, string[]>();
+	for (const item of serverItems) {
+		const sku = item.sku?.trim() ?? '';
+		const urls = item.photoUrls ?? [];
+		if (sku === '' || urls.length === 0) continue;
+		// Later duplicates win, matching dedupeBySku's "most recent" intent closely
+		// enough — Convex returns one doc per item, so collisions are rare.
+		index.set(sku, [...urls]);
+	}
+	return index;
+}
+
 /** Serialise for download — indented so the file stays diffable/inspectable. */
 export function serialisePhotoManifest(manifest: PhotoManifest): string {
 	return JSON.stringify(manifest, null, 2) + '\n';

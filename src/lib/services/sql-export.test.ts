@@ -127,6 +127,94 @@ describe('buildSqlExport', () => {
 		expect(result.sql).toContain('skipped (missing sku)');
 	});
 
+	it('writes photo links as a JSON array into photo_urls', () => {
+		const { sql } = buildSqlExport(
+			[item({ sku: 'A1' })],
+			NOW,
+			new Map([['A1', ['https://cx/a', 'https://cx/b']]])
+		);
+		expect(sql).toContain('`photo_urls`');
+		// MySQL parses the quoted literal into JSON, so it must be valid JSON.
+		expect(sql).toContain('\'[\\"https://cx/a\\",\\"https://cx/b\\"]\'');
+		expect(sql).toContain('`photo_urls` = VALUES(`photo_urls`)');
+	});
+
+	it('writes NULL for an item absent from a supplied index, to clear its links', () => {
+		const emptyEntry = buildSqlExport([item({ sku: 'A1' })], NOW, new Map([['A1', []]])).sql;
+		const otherSku = buildSqlExport([item({ sku: 'A1' })], NOW, new Map([['B1', ['x']]])).sql;
+		for (const sql of [emptyEntry, otherSku]) {
+			expect(sql).toContain('`photo_urls`');
+			// photo_urls is last, so the row ends with the NULL that clears it.
+			expect(sql).toMatch(/, NULL\)$/m);
+		}
+	});
+
+	it('omits the photo_urls column entirely when no index is supplied', () => {
+		// Writing NULL instead would erase links already stored on every row.
+		const result = buildSqlExport([item({ sku: 'A1' })], NOW);
+		expect(result.photoUrlsIncluded).toBe(false);
+		expect(result.sql).not.toContain('photo_urls');
+		// ...so an import leaves whatever is stored untouched.
+		expect(result.sql).not.toMatch(/NULL\)/);
+	});
+
+	it('reports when photo links are included', () => {
+		const result = buildSqlExport([item({ sku: 'A1' })], NOW, new Map([['A1', ['https://cx/a']]]));
+		expect(result.photoUrlsIncluded).toBe(true);
+		expect(result.sql).toContain('`photo_urls` = VALUES(`photo_urls`)');
+	});
+
+	it('escapes URLs safely rather than breaking out of the literal', () => {
+		const { sql } = buildSqlExport(
+			[item({ sku: 'A1' })],
+			NOW,
+			new Map([['A1', ["https://cx/a?x='y"]]])
+		);
+		// The single quote is escaped, so the statement stays well-formed.
+		expect(sql).toContain("\\'y");
+		expect(sql).not.toMatch(/\?x='y/);
+	});
+
+	it('keeps the value count aligned with the column count', () => {
+		// Guards the positional VALUES list against a column being added without
+		// its value — which would shift every later field into the wrong column.
+		const { sql } = buildSqlExport([item({ sku: 'A1' })], NOW);
+		const columns = sql.match(/INSERT INTO `items` \((.*)\)/)![1].split(', ').length;
+		const values = sql.match(/^ {2}\((.*)\)$/m)![1];
+		// Split on commas outside quotes and parens (the category subquery has both).
+		let depth = 0;
+		let inQuote = false;
+		let count = 1;
+		for (let i = 0; i < values.length; i++) {
+			const c = values[i];
+			if (c === "'" && values[i - 1] !== '\\') inQuote = !inQuote;
+			else if (!inQuote && c === '(') depth++;
+			else if (!inQuote && c === ')') depth--;
+			else if (!inQuote && c === ',' && depth === 0) count++;
+		}
+		expect(count).toBe(columns);
+	});
+
+	it('skips values too long for the varchar(255) target columns', () => {
+		// Strict mode would abort the whole transaction on an over-long value.
+		const result = buildSqlExport(
+			[
+				item({ sku: 'A1', name: 'x'.repeat(256) }),
+				item({ sku: 'B1', barcode: 'b'.repeat(256) }),
+				item({ sku: 'c'.repeat(256) }),
+				item({ sku: 'D1', name: 'x'.repeat(255), description: 'y'.repeat(5000) })
+			],
+			NOW
+		);
+		// The 255-char name is fine, and description is TEXT so length is no issue.
+		expect(result.exported).toBe(1);
+		expect(result.skipped.map((s) => s.reason)).toEqual([
+			'name exceeds 255 characters (256)',
+			'barcode exceeds 255 characters (256)',
+			'sku exceeds 255 characters (256)'
+		]);
+	});
+
 	it('keeps only the newest item per sku, since sku is UNIQUE downstream', () => {
 		const result = buildSqlExport(
 			[

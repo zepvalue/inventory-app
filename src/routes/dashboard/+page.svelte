@@ -5,7 +5,11 @@
 	import { dbService, type Item } from '$lib/services/db';
 	import { compressImage } from '$lib/services/image';
 	import { buildSqlExport } from '$lib/services/sql-export';
-	import { buildPhotoManifest, serialisePhotoManifest } from '$lib/services/photo-manifest';
+	import {
+		buildPhotoManifest,
+		buildPhotoUrlIndex,
+		serialisePhotoManifest
+	} from '$lib/services/photo-manifest';
 	import { listItems } from '$lib/convex';
 	import {
 		sync,
@@ -124,21 +128,44 @@
 
 	// Export shaped for the external inventory database (the Laravel/MySQL
 	// schema), not for re-import into this app — use Export CSV for that.
-	function exportToSQL() {
+	//
+	// Photo links come from a live Convex pull rather than the local display
+	// cache, which can be stale or incomplete for legacy items. Offline (or if
+	// the pull fails) the export simply omits the photo_urls column, so the file
+	// stays safe to import — it just leaves existing links alone.
+	let exportingSql = $state(false);
+	async function exportToSQL() {
 		if (items.length === 0) return alert('No items to export.');
-		const { sql, exported, skipped, duplicateSkus } = buildSqlExport(items);
+
+		let photoUrls: Map<string, string[]> | undefined;
+		if ($online) {
+			exportingSql = true;
+			try {
+				photoUrls = buildPhotoUrlIndex(await listItems());
+			} catch (error) {
+				console.error('Could not fetch photo links:', error);
+			} finally {
+				exportingSql = false;
+			}
+		}
+
+		const { sql, exported, skipped, duplicateSkus, photoUrlsIncluded } = buildSqlExport(
+			items,
+			Date.now(),
+			photoUrls
+		);
 		const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 		download(sql, `inventory_import_${stamp}.sql`, 'application/sql');
 
 		const notes: string[] = [];
-		if (skipped.length) notes.push(`${skipped.length} skipped (missing sku or name)`);
+		if (skipped.length) notes.push(`${skipped.length} skipped (missing sku or name — see NOTES)`);
 		if (duplicateSkus.length) notes.push(`${duplicateSkus.length} duplicate sku(s) collapsed`);
-		const withPhotos = items.filter((i) => i.photos.length > 0).length;
-		if (withPhotos) notes.push(`${withPhotos} item(s) have photos, which SQL can't carry`);
-		alert(
-			`Exported ${exported} item(s) as SQL.` +
-				(notes.length ? `\n\n${notes.join('\n')}\n\nSee the comments at the end of the file.` : '')
+		notes.push(
+			photoUrlsIncluded
+				? `${photoUrls?.size ?? 0} item(s) carry photo links`
+				: 'No photo links (offline or Convex unreachable) — the import will leave existing links untouched'
 		);
+		alert(`Exported ${exported} item(s) as SQL.\n\n${notes.join('\n')}`);
 	}
 
 	// Companion to the SQL export: a sku -> photo-URL manifest for the Laravel
@@ -993,7 +1020,7 @@
 						</div>
 						<div class="dropdown-item" onclick={exportToSQL}>
 							<i class="material-icons">storage</i>
-							<span>Export SQL</span>
+							<span>{exportingSql ? 'Building…' : 'Export SQL'}</span>
 						</div>
 						<div class="dropdown-item" onclick={exportPhotoManifest}>
 							<i class="material-icons">photo_library</i>

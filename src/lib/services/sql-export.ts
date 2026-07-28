@@ -9,10 +9,10 @@
 // erroring, and categories are only inserted when a row with that name is
 // missing.
 //
-// Not covered: `photos`. The target schema stores images through Spatie
-// MediaLibrary (`media` table), which points at real files on a storage disk —
-// a SQL script can't carry the bytes. Photo references are emitted as a
-// commented manifest so they aren't silently lost.
+// Photos travel as *links*, not bytes: the caller passes photo URLs resolved
+// from a live Convex pull and they're written into the `photo_urls` JSON column
+// (added by the migration in docs/photo-migration.md). Copying the image files
+// into Spatie MediaLibrary instead is documented there as the alternative.
 
 import type { Item } from './db';
 
@@ -27,6 +27,12 @@ export interface SqlExportResult {
 	skipped: { name: string; sku: string; reason: string }[];
 	/** SKUs that appeared more than once locally; only the newest was kept. */
 	duplicateSkus: string[];
+	/**
+	 * Whether the script touches `photo_urls` at all. False when no photo links
+	 * were supplied — the column is then left out of the statement entirely, so
+	 * an import preserves whatever links are already stored.
+	 */
+	photoUrlsIncluded: boolean;
 }
 
 /**
@@ -109,6 +115,16 @@ function dedupeBySku(items: Item[]): { kept: Item[]; duplicateSkus: string[] } {
 	return { kept: [...bySku.values()], duplicateSkus };
 }
 
+/** Item fields whose target column is varchar(255). `description` is TEXT, so it's exempt. */
+const VARCHAR_255_FIELDS = ['sku', 'name', 'barcode'] as const;
+
+/**
+ * Name of the JSON column added to `items` to hold photo links (see
+ * docs/photo-migration.md for the migration). Declared once so renaming it is a
+ * one-word change here.
+ */
+export const PHOTO_URLS_COLUMN = 'photo_urls';
+
 const ITEM_COLUMNS = [
 	'sku',
 	'name',
@@ -119,18 +135,45 @@ const ITEM_COLUMNS = [
 	'sync_status',
 	'last_modified',
 	'created_at',
-	'updated_at'
+	'updated_at',
+	PHOTO_URLS_COLUMN
 ];
+
+/**
+ * A JSON array literal of photo links for the `photo_urls` column, or NULL.
+ *
+ * MySQL parses the quoted string into JSON on insert, so an invalid literal is
+ * rejected outright rather than stored as garbage.
+ */
+function photoUrlsExpr(urls: string[] | undefined): string {
+	if (!urls || urls.length === 0) return 'NULL';
+	return quote(JSON.stringify(urls));
+}
 
 /**
  * Build the import script.
  *
- * @param items  Items to export (typically `dbService.getAllItems()`, which
- *               already excludes soft-deleted rows).
- * @param now    Export timestamp in ms; injected so the output is deterministic
- *               in tests.
+ * @param items            Items to export (typically `dbService.getAllItems()`,
+ *                         which already excludes soft-deleted rows).
+ * @param now              Export timestamp in ms; injected so the output is
+ *                         deterministic in tests.
+ * @param photoUrlsBySku   Photo links keyed by sku, from a live Convex pull (see
+ *                         buildPhotoUrlIndex).
+ *
+ *                         Omit it entirely (offline, or the pull failed) and
+ *                         `photo_urls` is left out of the statement, so an
+ *                         import preserves any links already stored. Supply it
+ *                         and the column is authoritative: an item absent from
+ *                         the map writes NULL, which is what correctly clears
+ *                         the links for an item whose photos were removed.
+ *                         So pass a map built from a *full* pull, never a
+ *                         partial one.
  */
-export function buildSqlExport(items: Item[], now: number = Date.now()): SqlExportResult {
+export function buildSqlExport(
+	items: Item[],
+	now: number = Date.now(),
+	photoUrlsBySku?: Map<string, string[]>
+): SqlExportResult {
 	const generatedAt = toMysqlDateTime(now);
 
 	const skipped: SqlExportResult['skipped'] = [];
@@ -139,11 +182,26 @@ export function buildSqlExport(items: Item[], now: number = Date.now()): SqlExpo
 		// sku and name are NOT NULL in the target schema, and sku is the upsert key.
 		if (item.sku.trim() === '') {
 			skipped.push({ name: item.name, sku: item.sku, reason: 'missing sku' });
-		} else if (item.name.trim() === '') {
-			skipped.push({ name: item.name, sku: item.sku, reason: 'missing name' });
-		} else {
-			valid.push(item);
+			continue;
 		}
+		if (item.name.trim() === '') {
+			skipped.push({ name: item.name, sku: item.sku, reason: 'missing name' });
+			continue;
+		}
+		// This app imposes no length limit, but the target columns are varchar(255)
+		// and Laravel runs MySQL in strict mode — one over-long value would abort
+		// the whole transaction, taking every other item with it. Skipping and
+		// reporting is better than truncating data behind the user's back.
+		const tooLong = VARCHAR_255_FIELDS.find((f) => item[f].trim().length > 255);
+		if (tooLong) {
+			skipped.push({
+				name: item.name,
+				sku: item.sku,
+				reason: `${tooLong} exceeds 255 characters (${item[tooLong].trim().length})`
+			});
+			continue;
+		}
+		valid.push(item);
 	}
 
 	const { kept, duplicateSkus } = dedupeBySku(valid);
@@ -183,14 +241,20 @@ export function buildSqlExport(items: Item[], now: number = Date.now()): SqlExpo
 		out.push('');
 	}
 
+	// Without photo links, drop the column rather than writing NULL into it: an
+	// upsert would otherwise erase the links already stored on every row.
+	const columns = photoUrlsBySku
+		? ITEM_COLUMNS
+		: ITEM_COLUMNS.filter((c) => c !== PHOTO_URLS_COLUMN);
+
 	if (kept.length) {
-		const columnList = ITEM_COLUMNS.map((c) => `\`${c}\``).join(', ');
+		const columnList = columns.map((c) => `\`${c}\``).join(', ');
 		// `deleted_at` is reset so an item that was soft-deleted server-side but
 		// still exists locally comes back rather than staying hidden.
 		const updateClause = [
-			...ITEM_COLUMNS.filter((c) => c !== 'sku' && c !== 'created_at').map(
-				(c) => `  \`${c}\` = VALUES(\`${c}\`)`
-			),
+			...columns
+				.filter((c) => c !== 'sku' && c !== 'created_at')
+				.map((c) => `  \`${c}\` = VALUES(\`${c}\`)`),
 			'  `deleted_at` = NULL'
 		].join(',\n');
 
@@ -199,22 +263,28 @@ export function buildSqlExport(items: Item[], now: number = Date.now()): SqlExpo
 			const chunk = kept.slice(start, start + ROWS_PER_STATEMENT);
 			const rows = chunk.map((item) => {
 				const modified = toMysqlDateTime(item.lastModified);
-				return (
-					'  (' +
-					[
-						quote(item.sku.trim()),
-						quote(item.name.trim()),
-						nullableText(item.description),
-						categoryIdExpr(item.category),
-						nullableText(item.barcode),
-						item.is_active ? '1' : '0',
-						quote(syncStatusFor(item)),
-						quote(modified),
-						quote(modified),
-						quote(generatedAt)
-					].join(', ') +
-					')'
-				);
+				const values = [
+					quote(item.sku.trim()),
+					quote(item.name.trim()),
+					nullableText(item.description),
+					categoryIdExpr(item.category),
+					nullableText(item.barcode),
+					item.is_active ? '1' : '0',
+					quote(syncStatusFor(item)),
+					quote(modified),
+					quote(modified),
+					quote(generatedAt)
+				];
+				if (photoUrlsBySku) values.push(photoUrlsExpr(photoUrlsBySku.get(item.sku.trim())));
+				// The values are positional, so a column without a matching value (or
+				// vice versa) would silently shift every field after it into the wrong
+				// column. Fail loudly instead.
+				if (values.length !== columns.length) {
+					throw new Error(
+						`sql-export: ${values.length} values for ${columns.length} columns — these must match`
+					);
+				}
+				return '  (' + values.join(', ') + ')';
 			});
 			out.push(
 				`INSERT INTO \`items\` (${columnList})\nVALUES\n${rows.join(',\n')}\n` +
@@ -259,6 +329,7 @@ export function buildSqlExport(items: Item[], now: number = Date.now()): SqlExpo
 		sql: out.join('\n') + '\n',
 		exported: kept.length,
 		skipped,
-		duplicateSkus
+		duplicateSkus,
+		photoUrlsIncluded: photoUrlsBySku != null
 	};
 }

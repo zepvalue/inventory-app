@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPhotoManifest, serialisePhotoManifest } from './photo-manifest';
+import { buildPhotoManifest, buildPhotoUrlIndex, serialisePhotoManifest } from './photo-manifest';
 import type { ServerItem } from './sync-logic';
 
 const NOW = 1_700_000_000_000; // 2023-11-14T22:13:20.000Z
@@ -105,5 +105,32 @@ describe('serialisePhotoManifest', () => {
 		expect(json.endsWith('\n')).toBe(true);
 		expect(JSON.parse(json)).toMatchObject({ item_count: 0, photo_count: 0 });
 		expect(json).toContain('\n  "items"');
+	});
+});
+
+describe('buildPhotoUrlIndex', () => {
+	it('maps sku to its resolved photo URLs', () => {
+		const index = buildPhotoUrlIndex([
+			server({ sku: 'A1', photos: ['s1'], photoUrls: ['https://cx/a'] }),
+			server({ sku: 'B1', photos: ['s2', 's3'], photoUrls: ['https://cx/b', 'https://cx/c'] })
+		]);
+		expect(index.get('A1')).toEqual(['https://cx/a']);
+		expect(index.get('B1')).toEqual(['https://cx/b', 'https://cx/c']);
+	});
+
+	it('omits items with no resolvable photos or no sku', () => {
+		const index = buildPhotoUrlIndex([
+			server({ sku: 'A1', photos: ['legacy'], photoUrls: [] }),
+			server({ sku: '  ', photos: ['s1'], photoUrls: ['https://cx/a'] }),
+			server({ sku: 'C1', photos: [], photoUrls: [] })
+		]);
+		expect(index.size).toBe(0);
+	});
+
+	it('trims the sku so it matches the SQL export key', () => {
+		const index = buildPhotoUrlIndex([
+			server({ sku: ' A1 ', photos: ['s1'], photoUrls: ['https://cx/a'] })
+		]);
+		expect(index.get('A1')).toEqual(['https://cx/a']);
 	});
 });

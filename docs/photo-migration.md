@@ -1,12 +1,104 @@
-# Photo migration — Convex File Storage → Laravel (Spatie MediaLibrary)
+# Photos: getting them into the external inventory database
 
-The SQL export (`Export SQL` in the dashboard menu) carries the **item rows**. It
-cannot carry image bytes: the target schema stores images through Spatie
-MediaLibrary, which keeps files on a storage disk and indexes them in the `media`
-table. MediaLibrary derives the file path from the row's own `id`/`uuid` and
-writes `custom_properties` / `generated_conversions` / responsive images — so
+There are two ways to do this, and they solve different problems.
+
+|                                 | **A — link** (current)               | **B — copy the files**    |
+| ------------------------------- | ------------------------------------ | ------------------------- |
+| What lands in the DB            | Convex URLs in a `photo_urls` column | real files + `media` rows |
+| Needs                           | one migration (below)                | droplet/app access        |
+| Convex dependency               | permanent                            | none after the run        |
+| Laravel image tooling           | unavailable                          | conversions, thumbnails   |
+| If a photo is edited in the app | link breaks                          | unaffected                |
+
+**A is what the export currently produces.** B is documented further down as the
+path to a self-contained database, whenever that's wanted. They aren't exclusive
+— A now, B later, is a reasonable sequence.
+
+---
+
+# A — the `photo_urls` column
+
+## The migration
+
+This is the only schema change anything here requires. Hand it to whoever owns
+the database:
+
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('items', function (Blueprint $table) {
+            // Nullable: items without photos, and rows this import never touches,
+            // must stay valid. JSON because an item can have several photos.
+            $table->json('photo_urls')->nullable()->after('barcode');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('items', function (Blueprint $table) {
+            $table->dropColumn('photo_urls');
+        });
+    }
+};
+```
+
+Or as plain DDL, if they'd rather not run a migration:
+
+```sql
+ALTER TABLE `items` ADD COLUMN `photo_urls` json DEFAULT NULL AFTER `barcode`;
+```
+
+> **Naming.** You asked for `photos_url`; the export writes **`photo_urls`**,
+> since the column holds several. To switch it back, change
+> `PHOTO_URLS_COLUMN` in [`src/lib/services/sql-export.ts`](../src/lib/services/sql-export.ts)
+> and the migration to match. It's one word in one place.
+
+## What the export writes
+
+A JSON array, or `NULL` for items with no photos:
+
+```sql
+INSERT INTO `items` (…, `photo_urls`) VALUES
+  ('KIT10000001', …, '["https://xyz.convex.cloud/api/storage/abc","https://…/def"]'),
+  ('RIG10000002', …, NULL)
+ON DUPLICATE KEY UPDATE …, `photo_urls` = VALUES(`photo_urls`);
+```
+
+MySQL parses the literal into JSON on insert, so a malformed array is rejected
+rather than stored as garbage.
+
+## Two things to know
+
+- **The links are only as durable as the Convex files.** Your app deletes a
+  storage file when a photo drops off an item
+  ([`convex/items.ts`](../convex/items.ts)), so editing a photo afterwards breaks
+  the stored link. Nothing on the database side will notice.
+- **An export with no photo links omits the column entirely.** Offline, or when
+  the Convex pull fails, the statement simply doesn't mention `photo_urls`, so
+  importing it leaves whatever links are stored untouched. There's no way to
+  produce a file that silently blanks them.
+- **When links _are_ included, the column is authoritative.** An item with no
+  photos writes `NULL` — which is what correctly clears the links after its
+  photos were deleted in the app.
+
+---
+
+# B — copy the files into MediaLibrary
+
+The rest of this document covers making the database self-contained: real files
+on a storage disk, indexed by `media`, with no dependency on Convex.
+
+MediaLibrary derives the file path from the row's own `id`/`uuid` and writes
+`custom_properties` / `generated_conversions` / responsive images — so
 hand-writing `media` INSERTs and rsyncing files is the fragile way to do this.
-
 Instead the photos move in a second pass, driven by MediaLibrary itself.
 
 ## The two files
@@ -178,3 +270,79 @@ Notes:
 - The droplet fetches each URL directly from Convex, so it needs outbound
   network access. The URLs are unauthenticated — anyone holding one can fetch the
   image — so treat the manifest as sensitive and delete it when done.
+
+## Disk space, and using DigitalOcean Spaces instead
+
+### How much space is actually needed
+
+The app compresses every photo to **1600px max, JPEG quality 0.75**
+([`src/lib/services/image.ts`](../src/lib/services/image.ts)) — roughly 200–400 KB
+each. Multiply the manifest's `photo_count` by ~0.3 MB for a working estimate:
+
+| Photos | Approx. total |
+| ------ | ------------- |
+| 500    | ~150 MB       |
+| 2,000  | ~600 MB       |
+| 10,000 | ~3 GB         |
+
+For scale: the smallest DigitalOcean droplet has 25 GB of SSD. Check `df -h`
+before assuming space is the binding constraint — in most cases it isn't.
+
+### If it is: point the media collection at Spaces
+
+MediaLibrary writes to any Laravel filesystem disk, S3-compatible included. The
+`media` table **already has `disk` and `conversions_disk` columns**, so this
+needs no schema change — files simply never land on the droplet.
+
+1. Install the S3 adapter, if it isn't already present:
+
+   ```bash
+   composer require league/flysystem-aws-s3-v3
+   ```
+
+2. Add the disk to `config/filesystems.php`:
+
+   ```php
+   'spaces' => [
+       'driver' => 's3',
+       'key' => env('DO_SPACES_KEY'),
+       'secret' => env('DO_SPACES_SECRET'),
+       'region' => env('DO_SPACES_REGION', 'nyc3'),
+       'bucket' => env('DO_SPACES_BUCKET'),
+       'endpoint' => env('DO_SPACES_ENDPOINT'), // https://nyc3.digitaloceanspaces.com
+       'use_path_style_endpoint' => false,
+       'visibility' => 'public',
+       'throw' => false,
+   ],
+   ```
+
+3. Point the collection at it, in `app/Models/Item.php`:
+
+   ```php
+   public function registerMediaCollections(): void
+   {
+       $this->addMediaCollection('photos')
+           ->useDisk('spaces')
+           ->storeConversionsOnDisk('spaces');
+   }
+   ```
+
+The Artisan command above then works **unchanged** — `toMediaCollection()`
+follows whatever disk the collection is configured for.
+
+Two caveats:
+
+- Changing the disk config affects **new** media only. Rows already written to
+  the local disk stay there; MediaLibrary won't relocate them. For a first-time
+  import that's moot, but don't expect it to migrate existing images.
+- `visibility => 'public'` makes the objects world-readable by URL, which is what
+  MediaLibrary's `getUrl()` assumes. If these photos shouldn't be public, use
+  private visibility and temporary URLs instead — that's a decision for whoever
+  owns the app, not something this import should quietly settle.
+
+### What this does _not_ solve
+
+Storing Convex URLs as links in the database remains impossible: `items` has no
+column for a URL, `media` rows point at a disk and path rather than an external
+address, and the schema can't be altered. Spaces changes _where the bytes live_,
+not whether the bytes have to be copied at all.
