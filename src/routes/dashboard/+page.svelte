@@ -4,6 +4,9 @@
 	import { fly, fade } from 'svelte/transition';
 	import { dbService, type Item } from '$lib/services/db';
 	import { compressImage } from '$lib/services/image';
+	import { buildSqlExport } from '$lib/services/sql-export';
+	import { buildPhotoManifest, serialisePhotoManifest } from '$lib/services/photo-manifest';
+	import { listItems } from '$lib/convex';
 	import {
 		sync,
 		queueSync,
@@ -16,9 +19,18 @@
 
 	// --- CONSTANTS ---
 	const categories = [
-		'Kitchen', 'Rig', 'Toys', 'Shade', 'Tensegrities',
-		'Wizard Hut', 'Power', 'Lighting', 'Store', 'Trash',
-		'Replace', 'Donate'
+		'Kitchen',
+		'Rig',
+		'Toys',
+		'Shade',
+		'Tensegrities',
+		'Wizard Hut',
+		'Power',
+		'Lighting',
+		'Store',
+		'Trash',
+		'Replace',
+		'Donate'
 	];
 
 	// --- STATE ---
@@ -99,12 +111,90 @@
 		await refresh();
 	}
 
-	// --- CSV & DOWNLOAD ---
+	// --- CSV, SQL & DOWNLOAD ---
+	function download(contents: string, filename: string, mime: string) {
+		const blob = new Blob([contents], { type: `${mime};charset=utf-8;` });
+		const link = document.createElement('a');
+		const url = URL.createObjectURL(blob);
+		link.setAttribute('href', url);
+		link.setAttribute('download', filename);
+		link.click();
+		URL.revokeObjectURL(url);
+	}
+
+	// Export shaped for the external inventory database (the Laravel/MySQL
+	// schema), not for re-import into this app — use Export CSV for that.
+	function exportToSQL() {
+		if (items.length === 0) return alert('No items to export.');
+		const { sql, exported, skipped, duplicateSkus } = buildSqlExport(items);
+		const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+		download(sql, `inventory_import_${stamp}.sql`, 'application/sql');
+
+		const notes: string[] = [];
+		if (skipped.length) notes.push(`${skipped.length} skipped (missing sku or name)`);
+		if (duplicateSkus.length) notes.push(`${duplicateSkus.length} duplicate sku(s) collapsed`);
+		const withPhotos = items.filter((i) => i.photos.length > 0).length;
+		if (withPhotos) notes.push(`${withPhotos} item(s) have photos, which SQL can't carry`);
+		alert(
+			`Exported ${exported} item(s) as SQL.` +
+				(notes.length ? `\n\n${notes.join('\n')}\n\nSee the comments at the end of the file.` : '')
+		);
+	}
+
+	// Companion to the SQL export: a sku -> photo-URL manifest for the Laravel
+	// side to pull through Spatie MediaLibrary (see docs/photo-migration.md).
+	// Unlike the other exports this needs the network — the URLs are resolved
+	// fresh by Convex rather than read from the local display cache, which can be
+	// stale or (for legacy items) missing entries.
+	let exportingPhotos = $state(false);
+	async function exportPhotoManifest() {
+		if (!$online) return alert('Photo manifest needs a connection — the URLs come from Convex.');
+		if (
+			$pendingCount > 0 &&
+			!confirm(
+				`${$pendingCount} item(s) haven't synced yet. Their photos exist only on this device and ` +
+					`will be missing from the manifest.\n\nExport anyway?`
+			)
+		)
+			return;
+
+		exportingPhotos = true;
+		try {
+			const manifest = buildPhotoManifest(await listItems());
+			const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+			download(
+				serialisePhotoManifest(manifest),
+				`photo_manifest_${stamp}.json`,
+				'application/json'
+			);
+			alert(
+				`Manifest lists ${manifest.photo_count} photo(s) across ${manifest.item_count} item(s).` +
+					(manifest.warnings.length
+						? `\n\n${manifest.warnings.length} warning(s) — see "warnings" in the file.`
+						: '')
+			);
+		} catch (error) {
+			console.error('Photo manifest export failed:', error);
+			alert(
+				`Could not build the photo manifest: ${error instanceof Error ? error.message : error}`
+			);
+		} finally {
+			exportingPhotos = false;
+		}
+	}
+
 	function exportToCSV() {
 		if (items.length === 0) return alert('No items to export.');
 		const headers = [
-			'id', 'name', 'sku', 'barcode', 'description', 'category', 
-			'is_active', 'photos', 'syncStatus'
+			'id',
+			'name',
+			'sku',
+			'barcode',
+			'description',
+			'category',
+			'is_active',
+			'photos',
+			'syncStatus'
 		];
 		const csvRows = [headers.join(',')];
 		for (const item of items) {
@@ -119,14 +209,7 @@
 			});
 			csvRows.push(values.join(','));
 		}
-		const csvString = csvRows.join('\n');
-		const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-		const link = document.createElement('a');
-		const url = URL.createObjectURL(blob);
-		link.setAttribute('href', url);
-		link.setAttribute('download', `inventory_export_${new Date().toISOString()}.csv`);
-		link.click();
-		URL.revokeObjectURL(url);
+		download(csvRows.join('\n'), `inventory_export_${new Date().toISOString()}.csv`, 'text/csv');
 	}
 
 	function parseCsvRow(row: string): string[] {
@@ -136,9 +219,18 @@
 		for (let i = 0; i < row.length; i++) {
 			const char = row[i];
 			if (char === '"') {
-				if (inQuotes && row[i + 1] === '"') { currentField += '"'; i++; } else { inQuotes = !inQuotes; }
-			} else if (char === ',' && !inQuotes) { result.push(currentField); currentField = '';
-			} else { currentField += char; }
+				if (inQuotes && row[i + 1] === '"') {
+					currentField += '"';
+					i++;
+				} else {
+					inQuotes = !inQuotes;
+				}
+			} else if (char === ',' && !inQuotes) {
+				result.push(currentField);
+				currentField = '';
+			} else {
+				currentField += char;
+			}
 		}
 		result.push(currentField);
 		return result;
@@ -295,7 +387,9 @@
 		await tick();
 		if (!videoElement) return;
 		try {
-			mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+			mediaStream = await navigator.mediaDevices.getUserMedia({
+				video: { facingMode: 'environment' }
+			});
 			videoElement.srcObject = mediaStream;
 		} catch (err) {
 			alert('Could not access the camera. Please check permissions.');
@@ -483,7 +577,9 @@
 			justify-content: center;
 			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 			cursor: pointer;
-			transition: transform 150ms ease, box-shadow 150ms ease;
+			transition:
+				transform 150ms ease,
+				box-shadow 150ms ease;
 			animation: fabPulse 6s ease-in-out infinite;
 		}
 		.fab:hover {
@@ -500,7 +596,9 @@
 			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 			padding: 16px;
 			margin-bottom: 12px;
-			transition: transform 200ms ease, box-shadow 200ms ease;
+			transition:
+				transform 200ms ease,
+				box-shadow 200ms ease;
 		}
 		.item-card:hover {
 			transform: translateY(-2px);
@@ -605,56 +703,151 @@
 			color: #b71c1c;
 		}
 		@keyframes pulse {
-			0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; }
+			0% {
+				opacity: 1;
+			}
+			50% {
+				opacity: 0.4;
+			}
+			100% {
+				opacity: 1;
+			}
 		}
 		@keyframes fabPulse {
-			0%, 100% { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); }
-			50% { box-shadow: 0 4px 16px rgba(103, 80, 164, 0.4); }
+			0%,
+			100% {
+				box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+			}
+			50% {
+				box-shadow: 0 4px 16px rgba(103, 80, 164, 0.4);
+			}
 		}
 		@keyframes spin {
-			from { transform: rotate(0deg); }
-			to { transform: rotate(360deg); }
+			from {
+				transform: rotate(0deg);
+			}
+			to {
+				transform: rotate(360deg);
+			}
 		}
 		.modal-backdrop {
-			position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.5);
-			display: flex; align-items: center; justify-content: center;
-			z-index: 50; padding: 16px;
+			position: fixed;
+			inset: 0;
+			background-color: rgba(0, 0, 0, 0.5);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			z-index: 50;
+			padding: 16px;
 		}
 		.modal-content {
-			background-color: var(--md-sys-color-surface); border-radius: 28px;
-			padding: 20px; width: 100%; max-width: 400px;
-			box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2); max-height: 90vh; overflow-y: auto;
+			background-color: var(--md-sys-color-surface);
+			border-radius: 28px;
+			padding: 20px;
+			width: 100%;
+			max-width: 400px;
+			box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+			max-height: 90vh;
+			overflow-y: auto;
 		}
-		.modal-header { font-size: 1.375rem; margin-bottom: 16px; }
-		.form-field { margin-bottom: 16px; }
-		.form-field label, .form-field-label {
-			display: block; font-size: 0.75rem; color: var(--md-sys-color-primary);
-			margin-bottom: 4px; padding-left: 16px;
+		.modal-header {
+			font-size: 1.375rem;
+			margin-bottom: 16px;
 		}
-		.input-container { position: relative; display: flex; align-items: center; gap: 8px; }
-		.form-field input[type='text'], .form-field textarea, .form-field select {
-			background-color: var(--md-sys-color-surface-variant); border: none;
-			border-radius: 4px; padding: 14px 16px; font-size: 1rem;
-			color: var(--md-sys-color-on-surface-variant); width: 100%; box-sizing: border-box;
+		.form-field {
+			margin-bottom: 16px;
 		}
-		.form-field textarea { font-family: 'Roboto', sans-serif; resize: vertical; }
-		.checkbox-field { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
-		.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+		.form-field label,
+		.form-field-label {
+			display: block;
+			font-size: 0.75rem;
+			color: var(--md-sys-color-primary);
+			margin-bottom: 4px;
+			padding-left: 16px;
+		}
+		.input-container {
+			position: relative;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+		.form-field input[type='text'],
+		.form-field textarea,
+		.form-field select {
+			background-color: var(--md-sys-color-surface-variant);
+			border: none;
+			border-radius: 4px;
+			padding: 14px 16px;
+			font-size: 1rem;
+			color: var(--md-sys-color-on-surface-variant);
+			width: 100%;
+			box-sizing: border-box;
+		}
+		.form-field textarea {
+			font-family: 'Roboto', sans-serif;
+			resize: vertical;
+		}
+		.checkbox-field {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 12px 0;
+		}
+		.modal-actions {
+			display: flex;
+			justify-content: flex-end;
+			gap: 8px;
+			margin-top: 24px;
+		}
 		.btn {
-			padding: 10px 20px; border-radius: 20px; border: none;
-			font-weight: 500; text-transform: uppercase; cursor: pointer;
+			padding: 10px 20px;
+			border-radius: 20px;
+			border: none;
+			font-weight: 500;
+			text-transform: uppercase;
+			cursor: pointer;
 		}
-		.btn-text { background: none; color: var(--md-sys-color-primary); transition: background-color 150ms ease; }
-		.btn-text:hover { background-color: rgba(103, 80, 164, 0.08); }
-		.btn-filled { background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); transition: box-shadow 150ms ease, transform 100ms ease; }
-		.btn-filled:hover:not(:disabled) { box-shadow: 0 2px 8px rgba(103, 80, 164, 0.35); }
-		.btn-filled:active:not(:disabled) { transform: scale(0.97); }
-		.btn-filled:disabled { background-color: #e0e0e0; color: #9e9e9e; cursor: not-allowed; }
+		.btn-text {
+			background: none;
+			color: var(--md-sys-color-primary);
+			transition: background-color 150ms ease;
+		}
+		.btn-text:hover {
+			background-color: rgba(103, 80, 164, 0.08);
+		}
+		.btn-filled {
+			background-color: var(--md-sys-color-primary);
+			color: var(--md-sys-color-on-primary);
+			transition:
+				box-shadow 150ms ease,
+				transform 100ms ease;
+		}
+		.btn-filled:hover:not(:disabled) {
+			box-shadow: 0 2px 8px rgba(103, 80, 164, 0.35);
+		}
+		.btn-filled:active:not(:disabled) {
+			transform: scale(0.97);
+		}
+		.btn-filled:disabled {
+			background-color: #e0e0e0;
+			color: #9e9e9e;
+			cursor: not-allowed;
+		}
 		.btn-icon {
-			display: inline-flex; align-items: center; justify-content: center;
-			width: 40px; height: 40px; padding: 0; border-radius: 50%;
-			border: none; background: none; cursor: pointer; color: var(--md-sys-color-on-surface-variant);
-			transition: background-color 150ms ease, transform 100ms ease;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 40px;
+			height: 40px;
+			padding: 0;
+			border-radius: 50%;
+			border: none;
+			background: none;
+			cursor: pointer;
+			color: var(--md-sys-color-on-surface-variant);
+			transition:
+				background-color 150ms ease,
+				transform 100ms ease;
 		}
 		.btn-icon:hover {
 			background-color: rgba(0, 0, 0, 0.06);
@@ -663,29 +856,59 @@
 			transform: scale(0.9);
 		}
 		#scanner-container {
-			width: 100%; height: 250px; position: relative; background-color: #000;
-			border-radius: 12px; overflow: hidden; margin-bottom: 16px;
+			width: 100%;
+			height: 250px;
+			position: relative;
+			background-color: #000;
+			border-radius: 12px;
+			overflow: hidden;
+			margin-bottom: 16px;
 		}
-		.photo-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-		.thumbnail { position: relative; width: 72px; height: 72px; }
+		.photo-gallery {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+			margin-top: 8px;
+		}
+		.thumbnail {
+			position: relative;
+			width: 72px;
+			height: 72px;
+		}
 		.thumbnail img {
-			width: 100%; height: 100%; object-fit: cover; border-radius: 4px;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			border-radius: 4px;
 			border: 1px solid var(--md-sys-color-outline);
 		}
 		.thumbnail .remove-btn {
-			position: absolute; top: -4px; right: -4px; width: 20px; height: 20px;
-			border-radius: 50%; border: 1px solid white; background-color: var(--md-sys-color-error);
-			color: white; display: flex; align-items: center; justify-content: center;
-			cursor: pointer; font-size: 14px; line-height: 1;
+			position: absolute;
+			top: -4px;
+			right: -4px;
+			width: 20px;
+			height: 20px;
+			border-radius: 50%;
+			border: 1px solid white;
+			background-color: var(--md-sys-color-error);
+			color: white;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			font-size: 14px;
+			line-height: 1;
 		}
-		.dropdown { position: relative; }
+		.dropdown {
+			position: relative;
+		}
 		.dropdown-menu {
 			position: absolute;
 			top: 100%;
 			right: 0;
 			background-color: var(--md-sys-color-surface);
 			border-radius: 4px;
-			box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 			padding: 8px 0;
 			z-index: 20;
 			min-width: 160px;
@@ -700,7 +923,7 @@
 			transition: background-color 120ms ease;
 		}
 		.dropdown-item:hover {
-			background-color: rgba(0,0,0,0.05);
+			background-color: rgba(0, 0, 0, 0.05);
 		}
 	</style>
 </svelte:head>
@@ -710,7 +933,13 @@
 		<div style="display:flex; align-items:center; gap:8px;">
 			<h1>Inventory</h1>
 			<span
-				class="status-chip {!$online ? 'error' : $syncing ? 'pending' : $pendingCount > 0 ? 'local' : 'synced'}"
+				class="status-chip {!$online
+					? 'error'
+					: $syncing
+						? 'pending'
+						: $pendingCount > 0
+							? 'local'
+							: 'synced'}"
 				title={$lastSyncError ?? ''}
 			>
 				{#if !$online}
@@ -726,7 +955,9 @@
 		</div>
 		<div class="top-bar-actions">
 			<button onclick={fetchItems} class="btn-icon" aria-label="Refresh items" disabled={$syncing}>
-				<i class="material-icons" style={$syncing ? 'animation: spin 1s linear infinite;' : ''}>refresh</i>
+				<i class="material-icons" style={$syncing ? 'animation: spin 1s linear infinite;' : ''}
+					>refresh</i
+				>
 			</button>
 			<button
 				class="btn btn-filled"
@@ -740,7 +971,7 @@
 				{/if}
 			</button>
 			<div class="dropdown">
-				<button onclick={() => showMenu = !showMenu} class="btn-icon" aria-label="More options">
+				<button onclick={() => (showMenu = !showMenu)} class="btn-icon" aria-label="More options">
 					<i class="material-icons">more_vert</i>
 				</button>
 				{#if showMenu}
@@ -749,13 +980,27 @@
 							<i class="material-icons">upload</i>
 							<span>Import CSV</span>
 						</label>
-						<input type="file" id="csv-import" accept=".csv" onchange={handleFileImport} style="display: none;" />
+						<input
+							type="file"
+							id="csv-import"
+							accept=".csv"
+							onchange={handleFileImport}
+							style="display: none;"
+						/>
 						<div class="dropdown-item" onclick={exportToCSV}>
 							<i class="material-icons">download</i>
 							<span>Export CSV</span>
 						</div>
+						<div class="dropdown-item" onclick={exportToSQL}>
+							<i class="material-icons">storage</i>
+							<span>Export SQL</span>
+						</div>
+						<div class="dropdown-item" onclick={exportPhotoManifest}>
+							<i class="material-icons">photo_library</i>
+							<span>{exportingPhotos ? 'Building…' : 'Export Photo Manifest'}</span>
+						</div>
 					</div>
-					<div class="fixed inset-0 z-10" onclick={() => showMenu = false}></div>
+					<div class="fixed inset-0 z-10" onclick={() => (showMenu = false)}></div>
 				{/if}
 			</div>
 		</div>
@@ -777,25 +1022,60 @@
 							<div class="item-card-actions">
 								{#if item.syncStatus === 'pending' || item.syncStatus === 'error'}
 									<button class="btn-icon" onclick={() => syncItem(item)} aria-label="Sync Item">
-										<i class="material-icons" style={item.syncStatus === 'error' ? 'color: var(--md-sys-color-error)' : ''}>sync</i>
+										<i
+											class="material-icons"
+											style={item.syncStatus === 'error' ? 'color: var(--md-sys-color-error)' : ''}
+											>sync</i
+										>
 									</button>
 								{/if}
-								<button class="btn-icon" onclick={() => handleEdit(item)} aria-label="Edit Item"><i class="material-icons">edit</i></button>
-								<button class="btn-icon" onclick={() => promptForDelete(item)} aria-label="Delete Item"><i class="material-icons" style="color: var(--md-sys-color-error)">delete</i></button>
+								<button class="btn-icon" onclick={() => handleEdit(item)} aria-label="Edit Item"
+									><i class="material-icons">edit</i></button
+								>
+								<button
+									class="btn-icon"
+									onclick={() => promptForDelete(item)}
+									aria-label="Delete Item"
+									><i class="material-icons" style="color: var(--md-sys-color-error)">delete</i
+									></button
+								>
 							</div>
 						</div>
 						<div class="item-card-body">
-							<div><p class="label">SKU</p><p class="value">{item.sku || 'N/A'}</p></div>
-							<div><p class="label">Category</p><p class="value">{item.category || 'N/A'}</p></div>
-							<div class="full-width"><p class="label">Sync Status</p><p><span class="status-chip {item.syncStatus ?? 'pending'}">{item.syncStatus ?? 'pending'}</span></p></div>
-							<div class="full-width"><p class="label">Photos</p>
+							<div>
+								<p class="label">SKU</p>
+								<p class="value">{item.sku || 'N/A'}</p>
+							</div>
+							<div>
+								<p class="label">Category</p>
+								<p class="value">{item.category || 'N/A'}</p>
+							</div>
+							<div class="full-width">
+								<p class="label">Sync Status</p>
+								<p>
+									<span class="status-chip {item.syncStatus ?? 'pending'}"
+										>{item.syncStatus ?? 'pending'}</span
+									>
+								</p>
+							</div>
+							<div class="full-width">
+								<p class="label">Photos</p>
 								{#if item.photos && item.photos.length > 0}
 									<div class="photo-gallery">
 										{#each item.photos as photo, i}
 											<div class="thumbnail">
-												<img src={photoSrc(item.photos, item.photoUrls, i)} alt="{item.name} preview {i + 1}" />
-												<button class="btn-icon" style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.5);" onclick={() => downloadPhoto(photoSrc(item.photos, item.photoUrls, i), item.sku, i)}>
-													<i class="material-icons" style="color:white; font-size:16px;">download</i>
+												<img
+													src={photoSrc(item.photos, item.photoUrls, i)}
+													alt="{item.name} preview {i + 1}"
+												/>
+												<button
+													class="btn-icon"
+													style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.5);"
+													onclick={() =>
+														downloadPhoto(photoSrc(item.photos, item.photoUrls, i), item.sku, i)}
+												>
+													<i class="material-icons" style="color:white; font-size:16px;">download</i
+													>
 												</button>
 											</div>
 										{/each}
@@ -816,12 +1096,22 @@
 	</button>
 
 	{#if selectedItem && formData}
-		<div bind:this={modalBackdrop} class="modal-backdrop" role="dialog" tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') handleCancel(); }} transition:fade={{ duration: 150 }}>
+		<div
+			bind:this={modalBackdrop}
+			class="modal-backdrop"
+			role="dialog"
+			tabindex="-1"
+			onkeydown={(e) => {
+				if (e.key === 'Escape') handleCancel();
+			}}
+			transition:fade={{ duration: 150 }}
+		>
 			<div class="modal-content">
 				{#if showCamera}
 					<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>Take Photo</h2>
 					<!-- svelte-ignore a11y-media-has-caption -->
-					<video bind:this={videoElement} autoplay playsinline class="w-full rounded-md bg-black"></video>
+					<video bind:this={videoElement} autoplay playsinline class="w-full rounded-md bg-black"
+					></video>
 					<canvas bind:this={canvasElement} style="display: none;"></canvas>
 					<div class="modal-actions">
 						<button type="button" onclick={stopCamera} class="btn btn-text">Cancel</button>
@@ -830,9 +1120,19 @@
 				{:else if showScanner}
 					<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>Scan Barcode</h2>
 					<div bind:this={scannerContainer} id="scanner-container"></div>
-					<div class="modal-actions"><button class="btn btn-text" onclick={() => { showScanner = false; stopScanner(); }}>Cancel</button></div>
+					<div class="modal-actions">
+						<button
+							class="btn btn-text"
+							onclick={() => {
+								showScanner = false;
+								stopScanner();
+							}}>Cancel</button
+						>
+					</div>
 				{:else}
-					<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>{formMode === 'create' ? 'Add New Item' : 'Edit Item'}</h2>
+					<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>
+						{formMode === 'create' ? 'Add New Item' : 'Edit Item'}
+					</h2>
 					<form onsubmit={handleSubmit}>
 						<div class="form-field">
 							<label for="category">Category</label>
@@ -859,18 +1159,38 @@
 							<div class="photo-gallery">
 								{#each formData.photos as photo, index}
 									<div class="thumbnail">
-										<img src={photoSrc(formData.photos, formData.photoUrls, index)} alt={`Preview ${index + 1}`} />
-										<button type="button" class="remove-btn" onclick={() => removePhoto(index)}>&times;</button>
+										<img
+											src={photoSrc(formData.photos, formData.photoUrls, index)}
+											alt={`Preview ${index + 1}`}
+										/>
+										<button type="button" class="remove-btn" onclick={() => removePhoto(index)}
+											>&times;</button
+										>
 									</div>
 								{/each}
 							</div>
 							<div class="photo-actions" style="display: flex; gap: 8px; margin-top: 8px;">
 								<button type="button" onclick={startCamera} class="btn btn-text">
-									<i class="material-icons" style="vertical-align: middle; margin-right: 4px;">photo_camera</i>Take Photo
+									<i class="material-icons" style="vertical-align: middle; margin-right: 4px;"
+										>photo_camera</i
+									>Take Photo
 								</button>
-								<input type="file" id="photo-upload" accept="image/*" onchange={handleFileSelect} style="display: none;" multiple />
-								<label for="photo-upload" class="btn btn-text" style="cursor: pointer; display: inline-flex; align-items: center;">
-									<i class="material-icons" style="vertical-align: middle; margin-right: 4px;">photo_library</i>From Gallery
+								<input
+									type="file"
+									id="photo-upload"
+									accept="image/*"
+									onchange={handleFileSelect}
+									style="display: none;"
+									multiple
+								/>
+								<label
+									for="photo-upload"
+									class="btn btn-text"
+									style="cursor: pointer; display: inline-flex; align-items: center;"
+								>
+									<i class="material-icons" style="vertical-align: middle; margin-right: 4px;"
+										>photo_library</i
+									>From Gallery
 								</label>
 							</div>
 						</div>
@@ -878,7 +1198,12 @@
 							<label for="barcode">Barcode</label>
 							<div class="input-container">
 								<input type="text" id="barcode" bind:value={formData.barcode} />
-								<button type="button" onclick={startBarcodeScanner} class="btn-icon" aria-label="Scan Barcode"><i class="material-icons">qr_code_scanner</i></button>
+								<button
+									type="button"
+									onclick={startBarcodeScanner}
+									class="btn-icon"
+									aria-label="Scan Barcode"><i class="material-icons">qr_code_scanner</i></button
+								>
 							</div>
 						</div>
 						<div class="checkbox-field">
@@ -910,7 +1235,9 @@
 				<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>Delete Item</h2>
 				<p>Delete <strong>{itemToDelete.name || 'this item'}</strong>? This can't be undone.</p>
 				<div class="modal-actions">
-					<button type="button" onclick={() => (itemToDelete = null)} class="btn btn-text">Cancel</button>
+					<button type="button" onclick={() => (itemToDelete = null)} class="btn btn-text"
+						>Cancel</button
+					>
 					<button
 						type="button"
 						onclick={executeDelete}
