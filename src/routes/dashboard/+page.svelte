@@ -31,6 +31,7 @@
 		'Wizard Hut',
 		'Power',
 		'Lighting',
+		'Water/Shower',
 		'Store',
 		'Trash',
 		'Replace',
