@@ -62,3 +62,27 @@ describe('markSynced / markError vs a concurrent delete', () => {
 		expect((await dbService.get(id))?.syncStatus).toBe('error');
 	});
 });
+
+describe('getAllItems ordering', () => {
+	beforeEach(async () => {
+		await dbService.clearAll();
+	});
+
+	it('returns newest-added first (stack order), regardless of name', async () => {
+		await seed({ name: 'Zebra tent' });
+		await seed({ name: 'Aardvark lamp' });
+		await seed({ name: 'Middle chair' });
+
+		const names = (await dbService.getAllItems()).map((i) => i.name);
+		expect(names).toEqual(['Middle chair', 'Aardvark lamp', 'Zebra tent']);
+	});
+
+	it('editing an item does not move it to the top', async () => {
+		const oldId = await seed({ name: 'Old item' });
+		await seed({ name: 'New item' });
+		await dbService.update(oldId, { name: 'Old item (edited)' });
+
+		const names = (await dbService.getAllItems()).map((i) => i.name);
+		expect(names).toEqual(['New item', 'Old item (edited)']);
+	});
+});
