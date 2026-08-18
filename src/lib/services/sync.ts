@@ -32,11 +32,15 @@ async function refreshPendingCount(): Promise<void> {
 
 /** Push every unsynced local item. Returns true if any item failed. */
 async function pushPending(): Promise<boolean> {
-	const items = await dbService.pending();
+	const snapshot = await dbService.pending();
 	let hadError = false;
 
-	for (const item of items) {
-		if (item.id == null) continue;
+	for (const stale of snapshot) {
+		if (stale.id == null) continue;
+		// Re-read: the snapshot goes stale while earlier items in the batch are
+		// still uploading — the user may have edited or deleted this item since.
+		const item = await dbService.get(stale.id);
+		if (!item || item.id == null || item.syncStatus === 'synced') continue;
 		try {
 			if (item.syncStatus === 'deleted') {
 				// Convex remove is idempotent — deleting an already-gone id is a no-op.
@@ -44,7 +48,13 @@ async function pushPending(): Promise<boolean> {
 				await dbService.hardDelete(item.id);
 			} else if (item.serverId == null) {
 				const saved = await withTimeout(createItem(toPayload(item)), CALL_TIMEOUT_MS);
-				await dbService.markSynced(item.id, saved.id);
+				if (await dbService.get(item.id)) {
+					await dbService.markSynced(item.id, saved.id);
+				} else {
+					// Deleted locally while the create was in flight — undo it
+					// server-side, or the pull would resurrect it.
+					await withTimeout(removeItem(saved.id), CALL_TIMEOUT_MS);
+				}
 			} else {
 				await withTimeout(updateItem(item.serverId, toPayload(item)), CALL_TIMEOUT_MS);
 				await dbService.markSynced(item.id, item.serverId);
@@ -78,7 +88,12 @@ export async function sync(): Promise<void> {
 		online.set(false);
 		return;
 	}
-	if (get(syncing)) return; // a sync is already in flight
+	if (get(syncing)) {
+		// A change landed while a sync is in flight; that sync's push snapshot may
+		// predate it. Instead of dropping the request, run once more afterwards.
+		rerunRequested = true;
+		return;
+	}
 
 	online.set(true);
 	syncing.set(true);
@@ -97,7 +112,14 @@ export async function sync(): Promise<void> {
 		await refreshPendingCount();
 		syncing.set(false);
 	}
+	if (rerunRequested) {
+		rerunRequested = false;
+		await sync();
+	}
 }
+
+/** Set when sync() is called while another sync is in flight (see above). */
+let rerunRequested = false;
 
 let debounce: ReturnType<typeof setTimeout> | undefined;
 

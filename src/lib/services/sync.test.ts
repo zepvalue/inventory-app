@@ -14,6 +14,7 @@ const { convex, db } = vi.hoisted(() => ({
 	},
 	db: {
 		pending: vi.fn(),
+		get: vi.fn(),
 		markSynced: vi.fn(),
 		markError: vi.fn(),
 		hardDelete: vi.fn(),
@@ -45,6 +46,13 @@ function item(partial: Partial<Item>): Item {
 	};
 }
 
+/** Queue items for the next push; db.get serves their current state (the push
+ *  re-reads each item to catch mid-flight edits/deletes). */
+function queue(items: Item[]) {
+	db.pending.mockResolvedValueOnce(items);
+	db.get.mockImplementation(async (id: number) => items.find((i) => i.id === id));
+}
+
 function serverItem(id: string): ServerItem {
 	return {
 		id,
@@ -68,7 +76,7 @@ describe('sync push (CRUD via Convex)', () => {
 	});
 
 	it('CREATE: creates a new item and marks it synced with the Convex id', async () => {
-		db.pending.mockResolvedValueOnce([item({ id: 7, serverId: null, syncStatus: 'pending' })]);
+		queue([item({ id: 7, serverId: null, syncStatus: 'pending' })]);
 		convex.createItem.mockResolvedValue(serverItem('k17abc'));
 
 		await sync();
@@ -79,7 +87,7 @@ describe('sync push (CRUD via Convex)', () => {
 	});
 
 	it('UPDATE: updates by serverId and re-marks it synced', async () => {
-		db.pending.mockResolvedValueOnce([item({ id: 7, serverId: 'k17abc', syncStatus: 'pending' })]);
+		queue([item({ id: 7, serverId: 'k17abc', syncStatus: 'pending' })]);
 		convex.updateItem.mockResolvedValue(serverItem('k17abc'));
 
 		await sync();
@@ -90,7 +98,7 @@ describe('sync push (CRUD via Convex)', () => {
 	});
 
 	it('DELETE: removes by serverId and hard-deletes locally', async () => {
-		db.pending.mockResolvedValueOnce([item({ id: 7, serverId: 'k17abc', syncStatus: 'deleted' })]);
+		queue([item({ id: 7, serverId: 'k17abc', syncStatus: 'deleted' })]);
 		convex.removeItem.mockResolvedValue(undefined);
 
 		await sync();
@@ -100,7 +108,7 @@ describe('sync push (CRUD via Convex)', () => {
 	});
 
 	it('DELETE of a never-synced item skips Convex and drops it locally', async () => {
-		db.pending.mockResolvedValueOnce([item({ id: 7, serverId: null, syncStatus: 'deleted' })]);
+		queue([item({ id: 7, serverId: null, syncStatus: 'deleted' })]);
 
 		await sync();
 
@@ -109,7 +117,7 @@ describe('sync push (CRUD via Convex)', () => {
 	});
 
 	it('failed DELETE stays queued (no markError) so the next sync retries it', async () => {
-		db.pending.mockResolvedValueOnce([item({ id: 7, serverId: 'k17abc', syncStatus: 'deleted' })]);
+		queue([item({ id: 7, serverId: 'k17abc', syncStatus: 'deleted' })]);
 		convex.removeItem.mockRejectedValue(new Error('boom'));
 
 		await sync();
@@ -120,7 +128,7 @@ describe('sync push (CRUD via Convex)', () => {
 	});
 
 	it('failed CREATE/UPDATE is marked error for retry', async () => {
-		db.pending.mockResolvedValueOnce([item({ id: 7, serverId: 'k17abc', syncStatus: 'pending' })]);
+		queue([item({ id: 7, serverId: 'k17abc', syncStatus: 'pending' })]);
 		convex.updateItem.mockRejectedValue(new Error('boom'));
 
 		await sync();
@@ -135,7 +143,7 @@ describe('sync push (CRUD via Convex)', () => {
 	it('a hung server call times out: sync settles, resets the client, and the next sync runs', async () => {
 		vi.useFakeTimers();
 		try {
-			db.pending.mockResolvedValueOnce([item({ id: 7, serverId: null, syncStatus: 'pending' })]);
+			queue([item({ id: 7, serverId: null, syncStatus: 'pending' })]);
 			convex.createItem.mockReturnValue(new Promise(() => {})); // never settles
 
 			const first = sync();
@@ -147,7 +155,7 @@ describe('sync push (CRUD via Convex)', () => {
 
 			// The latch must be released: a later sync reaches the server again.
 			convex.createItem.mockResolvedValue(serverItem('k17abc'));
-			db.pending.mockResolvedValueOnce([item({ id: 7, serverId: null, syncStatus: 'error' })]);
+			queue([item({ id: 7, serverId: null, syncStatus: 'error' })]);
 			const second = sync();
 			await vi.advanceTimersByTimeAsync(1);
 			await second;
@@ -160,7 +168,7 @@ describe('sync push (CRUD via Convex)', () => {
 	it('a hung push aborts the batch (no per-item deadline pile-up) and skips the pull', async () => {
 		vi.useFakeTimers();
 		try {
-			db.pending.mockResolvedValueOnce([
+			queue([
 				item({ id: 1, serverId: null, syncStatus: 'pending' }),
 				item({ id: 2, serverId: null, syncStatus: 'pending' })
 			]);
@@ -175,5 +183,57 @@ describe('sync push (CRUD via Convex)', () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+});
+
+// Deleting an item while a sync is in flight must not resurrect it: the push
+// works from a snapshot taken before the delete, so each item is re-read just
+// before (and, for creates, just after) its server call.
+describe('delete during an in-flight sync', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+		db.applyReconcile.mockResolvedValue(undefined);
+		db.pending.mockResolvedValue([]);
+		convex.listItems.mockResolvedValue([]);
+	});
+
+	it('an item hard-deleted after the snapshot is not pushed', async () => {
+		db.pending.mockResolvedValueOnce([item({ id: 7, serverId: null, syncStatus: 'pending' })]);
+		db.get.mockResolvedValue(undefined); // gone by the time the push reaches it
+
+		await sync();
+
+		expect(convex.createItem).not.toHaveBeenCalled();
+		expect(db.markSynced).not.toHaveBeenCalled();
+	});
+
+	it('an item deleted while its CREATE is in flight is removed server-side, not marked synced', async () => {
+		const pending = item({ id: 7, serverId: null, syncStatus: 'pending' });
+		db.pending.mockResolvedValueOnce([pending]);
+		// Present at the pre-push re-read, gone at the post-create check.
+		db.get.mockResolvedValueOnce(pending).mockResolvedValueOnce(undefined);
+		convex.createItem.mockResolvedValue(serverItem('k17abc'));
+
+		await sync();
+
+		// The regression: without the undo, the pull would re-insert 'k17abc'.
+		expect(convex.removeItem).toHaveBeenCalledWith('k17abc');
+		expect(db.markSynced).not.toHaveBeenCalled();
+	});
+
+	it('a sync requested during an in-flight sync runs afterwards instead of being dropped', async () => {
+		let releaseCreate!: (v: ServerItem) => void;
+		queue([item({ id: 7, serverId: null, syncStatus: 'pending' })]);
+		convex.createItem.mockReturnValue(new Promise((r) => (releaseCreate = r)));
+
+		const first = sync();
+		await Promise.resolve(); // let the first sync reach the hanging create
+		const second = sync(); // e.g. the delete's queueSync firing mid-flight
+		releaseCreate(serverItem('k17abc'));
+		await Promise.all([first, second]);
+
+		// Two full sync passes ran (one pull each), not one.
+		expect(convex.listItems).toHaveBeenCalledTimes(2);
 	});
 });

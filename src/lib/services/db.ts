@@ -137,14 +137,38 @@ class DatabaseService {
 
 	// --- Used by the sync engine ----------------------------------------
 
+	/** Current state of one item — the push re-reads this because its snapshot
+	 *  goes stale while earlier items in the batch are still uploading. */
+	async get(id: number): Promise<Item | undefined> {
+		if (!browser) return undefined;
+		return this.db.items.get(id);
+	}
+
 	async markSynced(id: number, serverId: string): Promise<void> {
 		if (!browser) return;
-		await this.db.items.update(id, { serverId, syncStatus: 'synced' });
+		// Read+write in one transaction: the user may delete the item while its
+		// push is in flight, and marking it 'synced' afterwards would resurrect it.
+		await this.db.transaction('rw', this.db.items, async () => {
+			const existing = await this.db.items.get(id);
+			if (!existing) return; // hard-deleted mid-push; nothing to mark
+			if (existing.syncStatus === 'deleted') {
+				// Soft-deleted mid-push — record the serverId so the next sync can
+				// delete it server-side, but keep it 'deleted'.
+				await this.db.items.update(id, { serverId });
+				return;
+			}
+			await this.db.items.update(id, { serverId, syncStatus: 'synced' });
+		});
 	}
 
 	async markError(id: number): Promise<void> {
 		if (!browser) return;
-		await this.db.items.update(id, { syncStatus: 'error' });
+		await this.db.transaction('rw', this.db.items, async () => {
+			const existing = await this.db.items.get(id);
+			// 'deleted' must survive a failed push (see shouldMarkErrorOnFailedPush).
+			if (!existing || existing.syncStatus === 'deleted') return;
+			await this.db.items.update(id, { syncStatus: 'error' });
+		});
 	}
 
 	async hardDelete(id: number): Promise<void> {
