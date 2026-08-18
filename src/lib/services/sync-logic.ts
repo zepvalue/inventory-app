@@ -4,6 +4,37 @@
 import type { Item, SyncStatus } from './db';
 
 /**
+ * Thrown when a server call exceeds its deadline. The Convex client never
+ * rejects while the backend is unreachable — it queues the work and retries
+ * its websocket forever — so without a deadline a sync() awaiting it would
+ * never settle and the `syncing` latch would block every future sync until
+ * the page is reloaded.
+ */
+export class SyncTimeoutError extends Error {
+	constructor(ms: number) {
+		super(`Server unreachable (no response within ${Math.round(ms / 1000)}s)`);
+		this.name = 'SyncTimeoutError';
+	}
+}
+
+/** Settle with the promise, or reject with SyncTimeoutError after `ms`. */
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => reject(new SyncTimeoutError(ms)), ms);
+		promise.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(err) => {
+				clearTimeout(timer);
+				reject(err);
+			}
+		);
+	});
+}
+
+/**
  * After a push to the server fails, decide whether to flip the item to 'error'.
  * A 'deleted' item must stay 'deleted' so the next sync retries the DELETE —
  * flipping it to 'error' would resurface it in the list and re-push it as an

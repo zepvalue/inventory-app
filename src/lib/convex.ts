@@ -50,6 +50,20 @@ const generateUploadUrlRef = makeFunctionReference<'mutation'>('items:generateUp
 
 let client: ConvexClient | null = null;
 
+/**
+ * Drop the current client (and its websocket + queued work). Called by the
+ * sync engine after a call times out: the client would otherwise deliver the
+ * timed-out mutation whenever it eventually reconnects, and since the item is
+ * still marked pending locally, the next push would then duplicate it. A fresh
+ * client is created lazily on the next call.
+ */
+export function resetClient(): void {
+	if (client) {
+		void client.close();
+		client = null;
+	}
+}
+
 function getClient(): ConvexClient {
 	if (!browser) throw new Error('Convex client is only available in the browser');
 	if (!CONVEX_URL) {

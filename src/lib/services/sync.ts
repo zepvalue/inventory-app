@@ -5,8 +5,18 @@
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { dbService } from './db';
-import { toPayload, shouldMarkErrorOnFailedPush } from './sync-logic';
-import { listItems, createItem, updateItem, removeItem } from '$lib/convex';
+import {
+	toPayload,
+	shouldMarkErrorOnFailedPush,
+	withTimeout,
+	SyncTimeoutError
+} from './sync-logic';
+import { listItems, createItem, updateItem, removeItem, resetClient } from '$lib/convex';
+
+// Deadline per server call. Generous enough for a create that uploads photos
+// on a slow connection, short enough that a wedged sync recovers in one go.
+// On timeout the item stays pending/error, so the next sync retries it.
+const CALL_TIMEOUT_MS = 20_000;
 
 /** Reactive status for the UI. */
 export const online = writable<boolean>(browser ? navigator.onLine : true);
@@ -30,13 +40,13 @@ async function pushPending(): Promise<boolean> {
 		try {
 			if (item.syncStatus === 'deleted') {
 				// Convex remove is idempotent — deleting an already-gone id is a no-op.
-				if (item.serverId != null) await removeItem(item.serverId);
+				if (item.serverId != null) await withTimeout(removeItem(item.serverId), CALL_TIMEOUT_MS);
 				await dbService.hardDelete(item.id);
 			} else if (item.serverId == null) {
-				const saved = await createItem(toPayload(item));
+				const saved = await withTimeout(createItem(toPayload(item)), CALL_TIMEOUT_MS);
 				await dbService.markSynced(item.id, saved.id);
 			} else {
-				await updateItem(item.serverId, toPayload(item));
+				await withTimeout(updateItem(item.serverId, toPayload(item)), CALL_TIMEOUT_MS);
 				await dbService.markSynced(item.id, item.serverId);
 			}
 		} catch (e) {
@@ -45,6 +55,10 @@ async function pushPending(): Promise<boolean> {
 			// (see shouldMarkErrorOnFailedPush) instead of resurrecting the item.
 			if (shouldMarkErrorOnFailedPush(item.syncStatus)) await dbService.markError(item.id);
 			lastSyncError.set(e instanceof Error ? e.message : 'Push failed');
+			// A timeout means the server is unreachable — pushing the remaining
+			// items would just burn a deadline each. Abort the batch; they're all
+			// still pending/error and the next sync retries them.
+			if (e instanceof SyncTimeoutError) throw e;
 		}
 	}
 
@@ -53,7 +67,7 @@ async function pushPending(): Promise<boolean> {
 
 /** Pull Convex's items and merge them into the local store. */
 async function pullFromServer(): Promise<void> {
-	const serverItems = await listItems();
+	const serverItems = await withTimeout(listItems(), CALL_TIMEOUT_MS);
 	await dbService.applyReconcile(serverItems);
 }
 
@@ -75,6 +89,10 @@ export async function sync(): Promise<void> {
 		if (!pushHadError) lastSyncedAt.set(Date.now());
 	} catch (e) {
 		lastSyncError.set(e instanceof Error ? e.message : 'Sync failed');
+		// After a timeout the Convex client still holds the timed-out call in
+		// its retry queue; drop it so a later reconnect can't replay it and
+		// duplicate work the next push will redo anyway.
+		if (e instanceof SyncTimeoutError) resetClient();
 	} finally {
 		await refreshPendingCount();
 		syncing.set(false);

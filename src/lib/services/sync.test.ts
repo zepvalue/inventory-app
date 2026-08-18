@@ -9,7 +9,8 @@ const { convex, db } = vi.hoisted(() => ({
 		listItems: vi.fn(),
 		createItem: vi.fn(),
 		updateItem: vi.fn(),
-		removeItem: vi.fn()
+		removeItem: vi.fn(),
+		resetClient: vi.fn()
 	},
 	db: {
 		pending: vi.fn(),
@@ -126,5 +127,53 @@ describe('sync push (CRUD via Convex)', () => {
 
 		expect(db.markError).toHaveBeenCalledWith(7);
 		expect(db.markSynced).not.toHaveBeenCalled();
+	});
+
+	// The wedge regression: the Convex client never rejects while the backend is
+	// unreachable, so without a deadline sync() would never settle and its
+	// `syncing` latch would silently block every future sync until page reload.
+	it('a hung server call times out: sync settles, resets the client, and the next sync runs', async () => {
+		vi.useFakeTimers();
+		try {
+			db.pending.mockResolvedValueOnce([item({ id: 7, serverId: null, syncStatus: 'pending' })]);
+			convex.createItem.mockReturnValue(new Promise(() => {})); // never settles
+
+			const first = sync();
+			await vi.advanceTimersByTimeAsync(21_000);
+			await first;
+
+			expect(db.markError).toHaveBeenCalledWith(7); // stays queued for retry
+			expect(convex.resetClient).toHaveBeenCalled(); // queued mutation dropped
+
+			// The latch must be released: a later sync reaches the server again.
+			convex.createItem.mockResolvedValue(serverItem('k17abc'));
+			db.pending.mockResolvedValueOnce([item({ id: 7, serverId: null, syncStatus: 'error' })]);
+			const second = sync();
+			await vi.advanceTimersByTimeAsync(1);
+			await second;
+			expect(db.markSynced).toHaveBeenCalledWith(7, 'k17abc');
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('a hung push aborts the batch (no per-item deadline pile-up) and skips the pull', async () => {
+		vi.useFakeTimers();
+		try {
+			db.pending.mockResolvedValueOnce([
+				item({ id: 1, serverId: null, syncStatus: 'pending' }),
+				item({ id: 2, serverId: null, syncStatus: 'pending' })
+			]);
+			convex.createItem.mockReturnValue(new Promise(() => {})); // never settles
+
+			const run = sync();
+			await vi.advanceTimersByTimeAsync(21_000);
+			await run;
+
+			expect(convex.createItem).toHaveBeenCalledTimes(1); // item 2 not attempted
+			expect(convex.listItems).not.toHaveBeenCalled(); // pull skipped
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

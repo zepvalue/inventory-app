@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
 	planReconcile,
 	toPayload,
 	fromServer,
 	shouldMarkErrorOnFailedPush,
+	withTimeout,
+	SyncTimeoutError,
 	type ServerItem
 } from './sync-logic';
 import type { Item } from './db';
@@ -119,5 +121,27 @@ describe('shouldMarkErrorOnFailedPush', () => {
 		expect(shouldMarkErrorOnFailedPush('pending')).toBe(true);
 		expect(shouldMarkErrorOnFailedPush('error')).toBe(true);
 		expect(shouldMarkErrorOnFailedPush('synced')).toBe(true);
+	});
+});
+
+describe('withTimeout', () => {
+	it('passes through a resolution that beats the deadline', async () => {
+		await expect(withTimeout(Promise.resolve('ok'), 1000)).resolves.toBe('ok');
+	});
+
+	it('passes through a rejection unchanged', async () => {
+		await expect(withTimeout(Promise.reject(new Error('boom')), 1000)).rejects.toThrow('boom');
+	});
+
+	it('rejects with SyncTimeoutError when the promise never settles', async () => {
+		vi.useFakeTimers();
+		try {
+			const hung = withTimeout(new Promise(() => {}), 1000);
+			const result = expect(hung).rejects.toBeInstanceOf(SyncTimeoutError);
+			await vi.advanceTimersByTimeAsync(1001);
+			await result;
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
