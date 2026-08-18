@@ -74,11 +74,11 @@ class DatabaseService {
 		if (browser) this.db = new InventoryDB();
 	}
 
-	/** Everything not soft-deleted, sorted by name for stable display. */
+	/** Everything not soft-deleted, newest first (local insertion order via the auto-increment id). */
 	async getAllItems(): Promise<Item[]> {
 		if (!browser) return [];
 		const all = await this.db.items.where('syncStatus').notEqual('deleted').toArray();
-		return all.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+		return all.sort((a, b) => (b.id ?? 0) - (a.id ?? 0));
 	}
 
 	/** Items with unsynced work (to push), in creation order. */
