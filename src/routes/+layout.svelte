@@ -1,20 +1,8 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    import { browser } from '$app/environment';
     import { MdTheme } from '$lib/components';
 
-    onMount(() => {
-        // This check ensures the code only runs in the browser, not on the server.
-        if (browser && 'serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/service-worker.js')
-                .then((registration) => {
-                    console.log('Service Worker registered with scope:', registration.scope);
-                })
-                .catch((error) => {
-                    console.error('Service Worker registration failed:', error);
-                });
-        }
-    });
+    // The service worker (src/service-worker.ts) is registered by SvelteKit
+    // automatically in production builds — no manual registration here.
 </script>
 
 <svelte:head>
