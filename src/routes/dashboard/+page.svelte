@@ -69,6 +69,7 @@
 	let selectedItem = $state<Item | null>(null);
 	let formData = $state<Item | null>(null);
 	let showMenu = $state(false);
+	let showFilterMenu = $state(false);
 	let activeCategoryFilters = $state<string[]>([]);
 
 	// Groups the flat item list into category buckets purely to drive the
@@ -912,46 +913,88 @@
 			color: var(--md-sys-color-outline);
 			font-size: 20px;
 		}
-		.filter-bar {
-			display: flex;
-			gap: 8px;
-			overflow-x: auto;
-			padding: 2px 2px 12px;
-			-ms-overflow-style: none;
-			scrollbar-width: none;
+		.filter-row {
+			margin-bottom: 12px;
 		}
-		.filter-bar::-webkit-scrollbar {
-			display: none;
-		}
-		.filter-chip {
-			flex-shrink: 0;
+		.filter-trigger {
 			display: inline-flex;
 			align-items: center;
-			gap: 5px;
-			padding: 6px 12px;
-			border-radius: 16px;
-			border: 1.5px solid var(--filter-color, var(--md-sys-color-outline-variant));
+			gap: 6px;
+			padding: 7px 14px;
+			border-radius: 20px;
+			border: 1px solid var(--md-sys-color-outline-variant);
 			background: none;
-			color: var(--filter-color, var(--md-sys-color-on-surface-variant));
+			color: var(--md-sys-color-on-surface-variant);
 			font-family: inherit;
 			font-size: 0.8125rem;
 			font-weight: 500;
 			cursor: pointer;
-			transition:
-				background-color 150ms ease,
-				color 150ms ease;
 		}
-		.filter-chip.active {
-			background-color: var(--filter-color, var(--md-sys-color-secondary-container));
-			border-color: var(--filter-color, var(--md-sys-color-secondary-container));
-			color: var(--filter-chip-active-text, #fff);
+		.filter-trigger .material-icons {
+			font-size: 18px;
 		}
-		.filter-chip:first-child.active {
-			color: var(--md-sys-color-on-secondary-container);
+		.filter-trigger.active {
+			border-color: var(--md-sys-color-primary);
+			color: var(--md-sys-color-primary);
 		}
-		.filter-chip-count {
+		.filter-trigger-count {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-width: 18px;
+			height: 18px;
+			padding: 0 5px;
+			border-radius: 9px;
+			background-color: var(--md-sys-color-primary);
+			color: var(--md-sys-color-on-primary);
 			font-size: 0.6875rem;
-			opacity: 0.75;
+			font-weight: 600;
+		}
+		.filter-menu {
+			left: 0;
+			right: auto;
+			min-width: 220px;
+			max-height: 340px;
+			overflow-y: auto;
+		}
+		.filter-menu-item {
+			width: 100%;
+			border: none;
+			background: none;
+			font-family: inherit;
+			text-align: left;
+			font-size: 0.875rem;
+		}
+		.filter-menu-divider {
+			height: 1px;
+			margin: 6px 0;
+			background-color: var(--md-sys-color-outline-variant);
+		}
+		.filter-menu-check {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+			width: 18px;
+			height: 18px;
+			border-radius: 4px;
+			border: 1.5px solid var(--filter-color, var(--md-sys-color-outline));
+		}
+		.filter-menu-check.checked {
+			background-color: var(--filter-color, var(--md-sys-color-primary));
+			border-color: var(--filter-color, var(--md-sys-color-primary));
+		}
+		.filter-menu-check .material-icons {
+			font-size: 14px;
+			color: #fff;
+		}
+		.filter-menu-label {
+			flex-grow: 1;
+			color: var(--md-sys-color-on-surface);
+		}
+		.filter-menu-count {
+			font-size: 0.75rem;
+			color: var(--md-sys-color-on-surface-variant);
 			font-variant-numeric: tabular-nums;
 		}
 		.detail-page {
@@ -1520,22 +1563,53 @@
 				<p class="empty-state-hint">Tap + to add your first item.</p>
 			</div>
 		{:else}
-			<div class="filter-bar">
-				<button
-					class="filter-chip {activeCategoryFilters.length === 0 ? 'active' : ''}"
-					onclick={clearCategoryFilters}
-				>
-					All <span class="filter-chip-count">{items.length}</span>
-				</button>
-				{#each categoryFilters as group (group.category)}
+			<div class="filter-row">
+				<div class="dropdown">
 					<button
-						class="filter-chip {activeCategoryFilters.includes(group.category) ? 'active' : ''}"
-						style="--filter-color: {group.color}"
-						onclick={() => toggleCategoryFilter(group.category)}
+						class="filter-trigger {activeCategoryFilters.length > 0 ? 'active' : ''}"
+						onclick={() => (showFilterMenu = !showFilterMenu)}
 					>
-						{group.category} <span class="filter-chip-count">{group.items.length}</span>
+						<i class="material-icons">filter_list</i>
+						<span>Filter</span>
+						{#if activeCategoryFilters.length > 0}
+							<span class="filter-trigger-count">{activeCategoryFilters.length}</span>
+						{/if}
 					</button>
-				{/each}
+					{#if showFilterMenu}
+						<div class="dropdown-menu filter-menu" transition:fly={{ y: -8, duration: 150 }}>
+							<button class="dropdown-item filter-menu-item" onclick={clearCategoryFilters}>
+								<span class="filter-menu-check {activeCategoryFilters.length === 0 ? 'checked' : ''}">
+									{#if activeCategoryFilters.length === 0}
+										<i class="material-icons">check</i>
+									{/if}
+								</span>
+								<span class="filter-menu-label">All categories</span>
+								<span class="filter-menu-count">{items.length}</span>
+							</button>
+							<div class="filter-menu-divider"></div>
+							{#each categoryFilters as group (group.category)}
+								<button
+									class="dropdown-item filter-menu-item"
+									onclick={() => toggleCategoryFilter(group.category)}
+								>
+									<span
+										class="filter-menu-check {activeCategoryFilters.includes(group.category)
+											? 'checked'
+											: ''}"
+										style="--filter-color: {group.color}"
+									>
+										{#if activeCategoryFilters.includes(group.category)}
+											<i class="material-icons">check</i>
+										{/if}
+									</span>
+									<span class="filter-menu-label">{group.category}</span>
+									<span class="filter-menu-count">{group.items.length}</span>
+								</button>
+							{/each}
+						</div>
+						<div class="fixed inset-0 z-10" onclick={() => (showFilterMenu = false)}></div>
+					{/if}
+				</div>
 			</div>
 
 			{#if filteredItems.length === 0}
