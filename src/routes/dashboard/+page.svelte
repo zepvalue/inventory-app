@@ -1952,7 +1952,11 @@
 							<span>{exportingPhotos ? 'Building…' : 'Export Photo Manifest'}</span>
 						</div>
 					</div>
-					<div class="fixed inset-0 z-10" onclick={() => (showMenu = false)}></div>
+					<div
+						class="fixed inset-0 z-10"
+						role="presentation"
+						onclick={() => (showMenu = false)}
+					></div>
 				{/if}
 			</div>
 		</div>
@@ -2050,7 +2054,11 @@
 								</button>
 							{/each}
 						</div>
-						<div class="fixed inset-0 z-10" onclick={() => (showFilterMenu = false)}></div>
+						<div
+						class="fixed inset-0 z-10"
+						role="presentation"
+						onclick={() => (showFilterMenu = false)}
+					></div>
 					{/if}
 				</div>
 
@@ -2072,7 +2080,11 @@
 								</button>
 							{/each}
 						</div>
-						<div class="fixed inset-0 z-10" onclick={() => (showSortMenu = false)}></div>
+						<div
+						class="fixed inset-0 z-10"
+						role="presentation"
+						onclick={() => (showSortMenu = false)}
+					></div>
 					{/if}
 				</div>
 			</div>
@@ -2470,6 +2482,7 @@
 											</div>
 											<div
 												class="fixed inset-0 z-10"
+												role="presentation"
 												onclick={() => (showPhotoSourceMenu = false)}
 											></div>
 										{/if}
