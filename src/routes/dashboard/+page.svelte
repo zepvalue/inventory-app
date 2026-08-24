@@ -2,6 +2,7 @@
 	// --- IMPORTS ---
 	import { tick, onMount } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
+	import { browser } from '$app/environment';
 	import { dbService, type Item } from '$lib/services/db';
 	import { compressImage } from '$lib/services/image';
 	import { buildSqlExport } from '$lib/services/sql-export';
@@ -189,6 +190,21 @@
 		if (viewingItem?.id == null) return;
 		const updated = items.find((i) => i.id === viewingItem?.id);
 		if (updated && updated !== viewingItem) viewingItem = updated;
+	});
+
+	// Locks background scroll while any full-screen/modal overlay is open.
+	// Without this, the item list underneath is still scrollable — on mobile,
+	// scrolling past the top or bottom of the overlay's own content triggers
+	// the browser's rubber-band overscroll, which reveals the scrolled list
+	// behind it for a moment even though the overlay is position: fixed and
+	// covers the full viewport.
+	$effect(() => {
+		if (!browser) return;
+		const overlayOpen = viewingItem !== null || selectedItem !== null || itemToDelete !== null;
+		document.body.style.overflow = overlayOpen ? 'hidden' : '';
+		return () => {
+			document.body.style.overflow = '';
+		};
 	});
 
 	function openDetail(item: Item) {
