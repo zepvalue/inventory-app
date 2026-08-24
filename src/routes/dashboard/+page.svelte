@@ -74,7 +74,7 @@
 	let showSortMenu = $state(false);
 	let activeCategoryFilters = $state<string[]>([]);
 	type SortOption = 'name-asc' | 'name-desc' | 'date-newest' | 'date-oldest';
-	let sortOption = $state<SortOption>('name-asc');
+	let sortOption = $state<SortOption>('date-newest');
 	const sortOptions: { value: SortOption; label: string }[] = [
 		{ value: 'name-asc', label: 'Name (A–Z)' },
 		{ value: 'name-desc', label: 'Name (Z–A)' },
@@ -1093,7 +1093,7 @@
 			overflow-y: auto;
 		}
 		.sort-menu {
-			min-width: 190px;
+			min-width: 220px;
 		}
 		.filter-menu-item {
 			width: 100%;
@@ -1139,6 +1139,7 @@
 		}
 		.filter-menu-label {
 			flex-grow: 1;
+			white-space: nowrap;
 			color: var(--md-sys-color-on-surface);
 		}
 		.filter-menu-count {
