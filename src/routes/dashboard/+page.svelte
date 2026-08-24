@@ -69,6 +69,7 @@
 	let selectedItem = $state<Item | null>(null);
 	let formData = $state<Item | null>(null);
 	let showMenu = $state(false);
+	let showPhotoSourceMenu = $state(false);
 	let showFilterMenu = $state(false);
 	let showSortMenu = $state(false);
 	let activeCategoryFilters = $state<string[]>([]);
@@ -751,6 +752,10 @@
 	}
 
 	function handleFileSelect(event: Event) {
+		// Closes the hero's photo-source menu if it was open -- harmless no-op
+		// if the file was picked via the other "From Gallery" trigger further
+		// down the form, which doesn't use this menu at all.
+		showPhotoSourceMenu = false;
 		const target = event.target as HTMLInputElement;
 		const files = target.files;
 		if (!files || !formData) return;
@@ -1225,7 +1230,6 @@
 			width: 100%;
 			height: 150px;
 			border-radius: 14px;
-			overflow: hidden;
 			margin-bottom: 14px;
 			padding: 0;
 			border: none;
@@ -1235,6 +1239,7 @@
 		.detail-hero-image {
 			width: 100%;
 			height: 100%;
+			border-radius: 14px;
 			object-fit: cover;
 		}
 		.detail-hero-placeholder {
@@ -1255,6 +1260,28 @@
 		.form-hero-placeholder span {
 			font-size: 0.8125rem;
 			font-weight: 500;
+			text-align: center;
+			padding: 0 16px;
+		}
+		.form-hero-dropdown {
+			position: relative;
+			width: 100%;
+			height: 100%;
+		}
+		.form-hero-trigger {
+			display: block;
+			width: 100%;
+			height: 100%;
+			padding: 0;
+			border: none;
+			background: none;
+			cursor: pointer;
+		}
+		.form-hero-menu {
+			left: 50%;
+			right: auto;
+			transform: translateX(-50%);
+			min-width: 220px;
 		}
 		.form-label-with-dot {
 			display: flex !important;
@@ -2395,9 +2422,9 @@
 						<div class="modal-scroll-body">
 							<div
 								class="detail-hero"
-								style={!formData.photos.length
-									? `background-color: ${categoryColor(formData.category || 'Uncategorized')}22;`
-									: ''}
+								style={formData.photos.length
+									? ''
+									: `background-color: ${categoryColor(formData.category || 'Uncategorized')}22;`}
 							>
 								{#if formData.photos.length > 0}
 									<img
@@ -2406,12 +2433,46 @@
 										alt={formData.name || 'Item preview'}
 									/>
 								{:else}
-									<div
-										class="detail-hero-placeholder form-hero-placeholder"
-										style="color: {categoryColor(formData.category || 'Uncategorized')};"
-									>
-										<i class="material-icons">add_a_photo</i>
-										<span>No photo yet</span>
+									<div class="dropdown form-hero-dropdown">
+										<button
+											type="button"
+											class="form-hero-trigger"
+											onclick={() => (showPhotoSourceMenu = !showPhotoSourceMenu)}
+										>
+											<div
+												class="detail-hero-placeholder form-hero-placeholder"
+												style="color: {categoryColor(formData.category || 'Uncategorized')};"
+											>
+												<i class="material-icons">add_a_photo</i>
+												<span>No photo yet — tap to add</span>
+											</div>
+										</button>
+										{#if showPhotoSourceMenu}
+											<div
+												class="dropdown-menu form-hero-menu"
+												transition:fly={{ y: -8, duration: 150 }}
+											>
+												<button
+													type="button"
+													class="dropdown-item"
+													onclick={() => {
+														showPhotoSourceMenu = false;
+														startCamera();
+													}}
+												>
+													<i class="material-icons">photo_camera</i>
+													<span>Take Photo</span>
+												</button>
+												<label for="photo-upload" class="dropdown-item">
+													<i class="material-icons">photo_library</i>
+													<span>Choose from Gallery</span>
+												</label>
+											</div>
+											<div
+												class="fixed inset-0 z-10"
+												onclick={() => (showPhotoSourceMenu = false)}
+											></div>
+										{/if}
 									</div>
 								{/if}
 							</div>
