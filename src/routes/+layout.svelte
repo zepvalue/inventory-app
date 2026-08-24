@@ -16,7 +16,7 @@
 <div class="app-shell">
     <!-- The <slot /> tag is where your page content (like +page.svelte) will be rendered. -->
     <slot />
-    <footer class="app-footer">Powered by <a class="app-footer-link" href="https://zepvalue.github.io" target="_blank" rel="noopener noreferrer">ZepValue</a></footer>
+    <footer class="app-footer">Powered by <a class="app-footer-link" href="https://zepvalue.github.io" target="_blank" rel="noopener noreferrer">zepvalue</a></footer>
 </div>
 </MdTheme>
 
