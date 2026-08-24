@@ -265,6 +265,41 @@
 	function closeDetail() {
 		viewingItem = null;
 	}
+
+	// Swipe-down-to-close on the bottom sheet. Only starts from the drag
+	// handle or the header bar (not the scrollable body), so it can never
+	// fight with normal content scrolling, and bails out entirely if the
+	// gesture starts on a button (back/edit/delete) so taps there still work.
+	// Pointer events (not touch-only) so this also works with mouse drag in
+	// a desktop browser during development.
+	const SHEET_CLOSE_THRESHOLD_PX = 100;
+	let sheetDragging = $state(false);
+	let sheetDragY = $state(0);
+	let dragStartClientY = 0;
+
+	function isInteractiveTarget(e: PointerEvent): boolean {
+		return !!(e.target as HTMLElement).closest('button, a');
+	}
+	function onSheetDragStart(e: PointerEvent) {
+		if (isInteractiveTarget(e)) return;
+		sheetDragging = true;
+		dragStartClientY = e.clientY;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+	function onSheetDragMove(e: PointerEvent) {
+		if (!sheetDragging) return;
+		// Only allow dragging downward — this is a close gesture, not a resize.
+		sheetDragY = Math.max(0, e.clientY - dragStartClientY);
+	}
+	function onSheetDragEnd() {
+		if (!sheetDragging) return;
+		sheetDragging = false;
+		if (sheetDragY > SHEET_CLOSE_THRESHOLD_PX) {
+			closeDetail();
+		}
+		sheetDragY = 0;
+	}
+
 	function editFromDetail(item: Item) {
 		closeDetail();
 		handleEdit(item);
@@ -1057,20 +1092,30 @@
 			overflow: hidden;
 		}
 		.detail-sheet-handle {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 100%;
+			height: 22px;
+			flex-shrink: 0;
+			cursor: grab;
+			touch-action: none;
+		}
+		.detail-sheet-handle::after {
+			content: '';
 			width: 36px;
 			height: 4px;
 			border-radius: 2px;
 			background-color: var(--md-sys-color-outline-variant);
-			margin: 10px auto 0;
-			flex-shrink: 0;
 		}
 		.detail-header {
 			display: flex;
 			align-items: center;
 			gap: 4px;
-			padding: 8px 8px 10px;
+			padding: 4px 8px 10px;
 			border-bottom: 1px solid var(--md-sys-color-outline-variant);
 			flex-shrink: 0;
+			touch-action: none;
 		}
 		.detail-header h2 {
 			flex-grow: 1;
@@ -1710,21 +1755,41 @@
 	</main>
 
 	{#if viewingItem}
-		<div class="detail-backdrop" transition:fade={{ duration: 150 }} onclick={closeDetail}>
+		<div
+			class="detail-backdrop"
+			style="background-color: rgba(0, 0, 0, {Math.max(0, 0.5 - sheetDragY / 400)});"
+			transition:fade={{ duration: 150 }}
+			onclick={closeDetail}
+		>
 			<div
 				bind:this={detailBackdrop}
 				class="detail-sheet"
 				role="dialog"
 				aria-label="{viewingItem.name} details"
 				tabindex="-1"
+				style="transform: translateY({sheetDragY}px); transition: {sheetDragging
+					? 'none'
+					: 'transform 200ms ease'};"
 				onkeydown={(e) => {
 					if (e.key === 'Escape') closeDetail();
 				}}
 				onclick={(e) => e.stopPropagation()}
 				transition:fly={{ y: 400, duration: 220 }}
 			>
-				<div class="detail-sheet-handle"></div>
-				<div class="detail-header">
+				<div
+					class="detail-sheet-handle"
+					onpointerdown={onSheetDragStart}
+					onpointermove={onSheetDragMove}
+					onpointerup={onSheetDragEnd}
+					onpointercancel={onSheetDragEnd}
+				></div>
+				<div
+					class="detail-header"
+					onpointerdown={onSheetDragStart}
+					onpointermove={onSheetDragMove}
+					onpointerup={onSheetDragEnd}
+					onpointercancel={onSheetDragEnd}
+				>
 					<button class="btn-icon" onclick={closeDetail} aria-label="Back to list">
 						<i class="material-icons">arrow_back</i>
 					</button>
