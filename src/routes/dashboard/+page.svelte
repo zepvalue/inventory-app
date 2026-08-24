@@ -904,13 +904,37 @@
 			display: flex;
 			flex-direction: column;
 		}
+		.detail-header {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+			padding: 10px 8px;
+			border-bottom: 1px solid var(--md-sys-color-outline-variant);
+			flex-shrink: 0;
+		}
+		.detail-header h2 {
+			flex-grow: 1;
+			min-width: 0;
+			margin: 0;
+			font-size: 1.0625rem;
+			font-weight: 600;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			padding: 0 4px;
+		}
+		.detail-body {
+			flex-grow: 1;
+			overflow-y: auto;
+			padding: 16px;
+		}
 		.detail-hero {
 			position: relative;
-			flex-shrink: 0;
-			height: 220px;
+			height: 180px;
 			background-color: var(--md-sys-color-surface-variant);
-			border-radius: 0 0 24px 24px;
+			border-radius: 16px;
 			overflow: hidden;
+			margin-bottom: 12px;
 		}
 		.detail-hero-image {
 			width: 100%;
@@ -925,45 +949,8 @@
 			justify-content: center;
 		}
 		.detail-hero-placeholder .material-icons {
-			font-size: 72px;
+			font-size: 64px;
 			opacity: 0.6;
-		}
-		.detail-hero-topbar {
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			padding: 10px;
-		}
-		.detail-hero-actions {
-			display: flex;
-			gap: 6px;
-		}
-		.detail-hero-btn {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			width: 38px;
-			height: 38px;
-			border-radius: 50%;
-			border: none;
-			background-color: rgba(255, 255, 255, 0.85);
-			color: #1c1b1f;
-			cursor: pointer;
-			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-			transition: background-color 150ms ease;
-		}
-		.detail-hero-btn:hover {
-			background-color: #fff;
-		}
-		.detail-hero-btn:active {
-			transform: scale(0.94);
-		}
-		.detail-hero-btn-danger:hover {
-			color: var(--md-sys-color-error);
 		}
 		.detail-hero-badge {
 			position: absolute;
@@ -976,23 +963,8 @@
 			color: #fff;
 			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 		}
-		.detail-body {
-			flex-grow: 1;
-			overflow-y: auto;
-			padding: 18px 16px 32px;
-		}
-		.detail-title-block {
-			margin-bottom: 12px;
-		}
-		.detail-title-block h2 {
-			margin: 0;
-			font-size: 1.375rem;
-			font-weight: 600;
-			color: var(--md-sys-color-on-surface);
-			overflow-wrap: break-word;
-		}
 		.detail-sku {
-			margin: 2px 0 0;
+			margin: 0 0 12px;
 			font-family: 'Roboto Mono', monospace;
 			font-size: 0.8125rem;
 			color: var(--md-sys-color-on-surface-variant);
@@ -1544,60 +1516,57 @@
 			}}
 			transition:fly={{ x: 32, duration: 200 }}
 		>
-			<div
-				class="detail-hero"
-				style={!viewingItem.photos?.length
-					? `background-color: ${categoryColor(viewingItem.category || 'Uncategorized')}22;`
-					: ''}
-			>
-				{#if viewingItem.photos && viewingItem.photos.length > 0}
-					<img
-						class="detail-hero-image"
-						src={photoSrc(viewingItem.photos, viewingItem.photoUrls, 0)}
-						alt={viewingItem.name}
-					/>
-				{:else}
-					<div
-						class="detail-hero-placeholder"
-						style="color: {categoryColor(viewingItem.category || 'Uncategorized')};"
-					>
-						<i class="material-icons">inventory_2</i>
-					</div>
-				{/if}
-				<div class="detail-hero-topbar">
-					<button class="detail-hero-btn" onclick={closeDetail} aria-label="Back to list">
-						<i class="material-icons">arrow_back</i>
-					</button>
-					<div class="detail-hero-actions">
-						<button
-							class="detail-hero-btn"
-							onclick={() => viewingItem && editFromDetail(viewingItem)}
-							aria-label="Edit Item"
-						>
-							<i class="material-icons">edit</i>
-						</button>
-						<button
-							class="detail-hero-btn detail-hero-btn-danger"
-							onclick={() => viewingItem && deleteFromDetail(viewingItem)}
-							aria-label="Delete Item"
-						>
-							<i class="material-icons">delete</i>
-						</button>
-					</div>
-				</div>
-				<span
-					class="detail-hero-badge"
-					style="background-color: {categoryColor(viewingItem.category || 'Uncategorized')};"
+			<div class="detail-header">
+				<button class="btn-icon" onclick={closeDetail} aria-label="Back to list">
+					<i class="material-icons">arrow_back</i>
+				</button>
+				<h2>{viewingItem.name}</h2>
+				<button
+					class="btn-icon"
+					onclick={() => viewingItem && editFromDetail(viewingItem)}
+					aria-label="Edit Item"
 				>
-					{viewingItem.category || 'Uncategorized'}
-				</span>
+					<i class="material-icons">edit</i>
+				</button>
+				<button
+					class="btn-icon btn-icon-danger"
+					onclick={() => viewingItem && deleteFromDetail(viewingItem)}
+					aria-label="Delete Item"
+				>
+					<i class="material-icons">delete</i>
+				</button>
 			</div>
 
 			<div class="detail-body">
-				<div class="detail-title-block">
-					<h2>{viewingItem.name}</h2>
-					<p class="detail-sku">{viewingItem.sku || 'No SKU'}</p>
+				<div
+					class="detail-hero"
+					style={!viewingItem.photos?.length
+						? `background-color: ${categoryColor(viewingItem.category || 'Uncategorized')}22;`
+						: ''}
+				>
+					{#if viewingItem.photos && viewingItem.photos.length > 0}
+						<img
+							class="detail-hero-image"
+							src={photoSrc(viewingItem.photos, viewingItem.photoUrls, 0)}
+							alt={viewingItem.name}
+						/>
+					{:else}
+						<div
+							class="detail-hero-placeholder"
+							style="color: {categoryColor(viewingItem.category || 'Uncategorized')};"
+						>
+							<i class="material-icons">inventory_2</i>
+						</div>
+					{/if}
+					<span
+						class="detail-hero-badge"
+						style="background-color: {categoryColor(viewingItem.category || 'Uncategorized')};"
+					>
+						{viewingItem.category || 'Uncategorized'}
+					</span>
 				</div>
+
+				<p class="detail-sku">{viewingItem.sku || 'No SKU'}</p>
 
 				<div class="detail-chip-row">
 					<span class="status-chip {viewingItem.is_active ? 'active' : 'inactive'}"
