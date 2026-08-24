@@ -1082,47 +1082,26 @@
 			height: 100%;
 			object-fit: cover;
 		}
-		.detail-top-row {
-			display: flex;
-			align-items: center;
-			gap: 12px;
-			margin-bottom: 14px;
+		.detail-section-title {
+			margin: 4px 0 8px;
+			font-size: 0.75rem;
+			font-weight: 600;
+			color: var(--md-sys-color-on-surface-variant);
 		}
-		.detail-icon {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			flex-shrink: 0;
-			width: 44px;
-			height: 44px;
-			border-radius: 10px;
+		.detail-grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 16px 12px;
+			margin-bottom: 20px;
 		}
-		.detail-icon .material-icons {
-			font-size: 22px;
-		}
-		.detail-top-text {
+		.detail-grid-cell {
 			min-width: 0;
 		}
-		.detail-sku {
-			display: inline-flex;
-			align-items: center;
-			margin: 0;
-			padding: 3px 10px;
-			border-radius: 8px;
-			background-color: var(--md-sys-color-surface-variant);
-			font-family: 'Roboto Mono', monospace;
-			font-size: 0.9375rem;
-			font-weight: 600;
-			letter-spacing: 0.04em;
-			color: var(--md-sys-color-on-surface);
-		}
-		.detail-category-line {
-			display: flex;
-			align-items: center;
-			gap: 6px;
-			margin: 4px 0 0;
-			font-size: 0.8125rem;
-			color: var(--md-sys-color-on-surface-variant);
+		.detail-sync-btn {
+			display: block;
+			margin-top: 4px;
+			padding: 2px 0;
+			height: auto;
 		}
 		.detail-category-dot {
 			width: 8px;
@@ -1130,47 +1109,14 @@
 			border-radius: 50%;
 			flex-shrink: 0;
 		}
-		.detail-chip-row {
-			display: flex;
-			align-items: center;
-			flex-wrap: wrap;
-			gap: 8px;
-			margin-bottom: 16px;
-		}
-		.detail-sync-btn {
-			padding: 4px 12px;
-		}
-		.detail-info {
-			background-color: var(--md-sys-color-surface-variant);
-			border-radius: 16px;
-			padding: 0 16px;
-			margin-bottom: 16px;
-		}
-		.detail-info-row {
-			display: flex;
-			align-items: flex-start;
-			gap: 12px;
-			padding: 12px 0;
-		}
-		.detail-info-row + .detail-info-row {
-			border-top: 1px solid var(--md-sys-color-outline-variant);
-		}
-		.detail-info-row .material-icons {
-			font-size: 20px;
-			color: var(--md-sys-color-on-surface-variant);
-			margin-top: 1px;
-		}
-		.detail-section-title {
-			margin: 4px 0 8px;
-			font-size: 0.75rem;
-			font-weight: 600;
-			color: var(--md-sys-color-on-surface-variant);
+		.detail-description {
+			margin-bottom: 8px;
 		}
 		.detail-photos {
 			margin-bottom: 8px;
 		}
 		.detail-label {
-			margin: 0 0 2px;
+			margin: 0 0 3px;
 			font-size: 0.75rem;
 			font-weight: 600;
 			color: var(--md-sys-color-on-surface-variant);
@@ -1182,6 +1128,21 @@
 		}
 		.detail-value.mono {
 			font-family: 'Roboto Mono', monospace;
+		}
+		.detail-value.sku-value {
+			display: inline-flex;
+			align-items: center;
+			padding: 2px 8px;
+			border-radius: 6px;
+			background-color: var(--md-sys-color-surface-variant);
+			font-family: 'Roboto Mono', monospace;
+			font-weight: 600;
+			letter-spacing: 0.03em;
+		}
+		.detail-value.category-value {
+			display: flex;
+			align-items: center;
+			gap: 6px;
 		}
 		.detail-value-description {
 			margin: 0;
@@ -1775,20 +1736,15 @@
 					</div>
 				{/if}
 
-				<div class="detail-top-row">
-					{#if !viewingItem.photos?.length}
-						<div
-							class="detail-icon"
-							style="background-color: {categoryColor(
-								viewingItem.category || 'Uncategorized'
-							)}22; color: {categoryColor(viewingItem.category || 'Uncategorized')};"
-						>
-							<i class="material-icons">inventory_2</i>
-						</div>
-					{/if}
-					<div class="detail-top-text">
-						<p class="detail-sku">{viewingItem.sku || 'No SKU'}</p>
-						<p class="detail-category-line">
+				<p class="detail-section-title">Details</p>
+				<div class="detail-grid">
+					<div class="detail-grid-cell">
+						<p class="detail-label">SKU</p>
+						<p class="detail-value sku-value">{viewingItem.sku || 'No SKU'}</p>
+					</div>
+					<div class="detail-grid-cell">
+						<p class="detail-label">Category</p>
+						<p class="detail-value category-value">
 							<span
 								class="detail-category-dot"
 								style="background-color: {categoryColor(viewingItem.category || 'Uncategorized')}"
@@ -1796,47 +1752,38 @@
 							{viewingItem.category || 'Uncategorized'}
 						</p>
 					</div>
-				</div>
-
-				<p class="detail-section-title">Status</p>
-				<div class="detail-chip-row">
-					<span class="status-chip {viewingItem.is_active ? 'active' : 'inactive'}"
-						>{viewingItem.is_active ? 'Active' : 'Inactive'}</span
-					>
-					<span class="status-chip {viewingItem.syncStatus ?? 'pending'}"
-						>{viewingItem.syncStatus ?? 'pending'}</span
-					>
-					{#if viewingItem.syncStatus === 'pending' || viewingItem.syncStatus === 'error'}
-						<button
-							class="btn btn-text detail-sync-btn"
-							onclick={() => viewingItem && syncItem(viewingItem)}
+					<div class="detail-grid-cell">
+						<p class="detail-label">Status</p>
+						<span class="status-chip {viewingItem.is_active ? 'active' : 'inactive'}"
+							>{viewingItem.is_active ? 'Active' : 'Inactive'}</span
 						>
-							Sync now
-						</button>
+					</div>
+					<div class="detail-grid-cell">
+						<p class="detail-label">Sync</p>
+						<span class="status-chip {viewingItem.syncStatus ?? 'pending'}"
+							>{viewingItem.syncStatus ?? 'pending'}</span
+						>
+						{#if viewingItem.syncStatus === 'pending' || viewingItem.syncStatus === 'error'}
+							<button
+								class="btn btn-text detail-sync-btn"
+								onclick={() => viewingItem && syncItem(viewingItem)}
+							>
+								Sync now
+							</button>
+						{/if}
+					</div>
+					{#if viewingItem.barcode}
+						<div class="detail-grid-cell">
+							<p class="detail-label">Barcode</p>
+							<p class="detail-value mono">{viewingItem.barcode}</p>
+						</div>
 					{/if}
 				</div>
 
-				{#if viewingItem.description || viewingItem.barcode}
-					<p class="detail-section-title">Details</p>
-					<div class="detail-info">
-						{#if viewingItem.description}
-							<div class="detail-info-row">
-								<i class="material-icons">notes</i>
-								<div>
-									<p class="detail-label">Description</p>
-									<p class="detail-value-description">{viewingItem.description}</p>
-								</div>
-							</div>
-						{/if}
-						{#if viewingItem.barcode}
-							<div class="detail-info-row">
-								<i class="material-icons">qr_code_2</i>
-								<div>
-									<p class="detail-label">Barcode</p>
-									<p class="detail-value mono">{viewingItem.barcode}</p>
-								</div>
-							</div>
-						{/if}
+				{#if viewingItem.description}
+					<div class="detail-description">
+						<p class="detail-label">Description</p>
+						<p class="detail-value-description">{viewingItem.description}</p>
 					</div>
 				{/if}
 
