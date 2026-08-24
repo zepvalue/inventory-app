@@ -1072,50 +1072,41 @@
 			padding: 16px;
 		}
 		.detail-hero {
-			position: relative;
-			height: 170px;
-			background-color: var(--md-sys-color-surface-variant);
-			border-radius: 16px;
+			height: 150px;
+			border-radius: 14px;
 			overflow: hidden;
 			margin-bottom: 14px;
-		}
-		.detail-hero.no-photo {
-			height: 100px;
 		}
 		.detail-hero-image {
 			width: 100%;
 			height: 100%;
 			object-fit: cover;
 		}
-		.detail-hero-placeholder {
-			width: 100%;
-			height: 100%;
+		.detail-top-row {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			margin-bottom: 14px;
+		}
+		.detail-icon {
 			display: flex;
 			align-items: center;
 			justify-content: center;
+			flex-shrink: 0;
+			width: 44px;
+			height: 44px;
+			border-radius: 10px;
 		}
-		.detail-hero-placeholder .material-icons {
-			font-size: 64px;
-			opacity: 0.6;
+		.detail-icon .material-icons {
+			font-size: 22px;
 		}
-		.detail-hero.no-photo .detail-hero-placeholder .material-icons {
-			font-size: 32px;
-		}
-		.detail-hero-badge {
-			position: absolute;
-			left: 12px;
-			bottom: 12px;
-			padding: 4px 12px;
-			border-radius: 14px;
-			font-size: 0.75rem;
-			font-weight: 600;
-			color: #fff;
-			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+		.detail-top-text {
+			min-width: 0;
 		}
 		.detail-sku {
 			display: inline-flex;
 			align-items: center;
-			margin: 0 0 10px;
+			margin: 0;
 			padding: 3px 10px;
 			border-radius: 8px;
 			background-color: var(--md-sys-color-surface-variant);
@@ -1124,6 +1115,20 @@
 			font-weight: 600;
 			letter-spacing: 0.04em;
 			color: var(--md-sys-color-on-surface);
+		}
+		.detail-category-line {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			margin: 4px 0 0;
+			font-size: 0.8125rem;
+			color: var(--md-sys-color-on-surface-variant);
+		}
+		.detail-category-dot {
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			flex-shrink: 0;
 		}
 		.detail-chip-row {
 			display: flex;
@@ -1760,35 +1765,38 @@
 			</div>
 
 			<div class="detail-body">
-				<div
-					class="detail-hero {!viewingItem.photos?.length ? 'no-photo' : ''}"
-					style={!viewingItem.photos?.length
-						? `background-color: ${categoryColor(viewingItem.category || 'Uncategorized')}22;`
-						: ''}
-				>
-					{#if viewingItem.photos && viewingItem.photos.length > 0}
+				{#if viewingItem.photos && viewingItem.photos.length > 0}
+					<div class="detail-hero">
 						<img
 							class="detail-hero-image"
 							src={photoSrc(viewingItem.photos, viewingItem.photoUrls, 0)}
 							alt={viewingItem.name}
 						/>
-					{:else}
+					</div>
+				{/if}
+
+				<div class="detail-top-row">
+					{#if !viewingItem.photos?.length}
 						<div
-							class="detail-hero-placeholder"
-							style="color: {categoryColor(viewingItem.category || 'Uncategorized')};"
+							class="detail-icon"
+							style="background-color: {categoryColor(
+								viewingItem.category || 'Uncategorized'
+							)}22; color: {categoryColor(viewingItem.category || 'Uncategorized')};"
 						>
 							<i class="material-icons">inventory_2</i>
 						</div>
 					{/if}
-					<span
-						class="detail-hero-badge"
-						style="background-color: {categoryColor(viewingItem.category || 'Uncategorized')};"
-					>
-						{viewingItem.category || 'Uncategorized'}
-					</span>
+					<div class="detail-top-text">
+						<p class="detail-sku">{viewingItem.sku || 'No SKU'}</p>
+						<p class="detail-category-line">
+							<span
+								class="detail-category-dot"
+								style="background-color: {categoryColor(viewingItem.category || 'Uncategorized')}"
+							></span>
+							{viewingItem.category || 'Uncategorized'}
+						</p>
+					</div>
 				</div>
-
-				<p class="detail-sku">{viewingItem.sku || 'No SKU'}</p>
 
 				<div class="detail-chip-row">
 					<span class="status-chip {viewingItem.is_active ? 'active' : 'inactive'}"
