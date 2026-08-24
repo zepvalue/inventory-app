@@ -1039,19 +1039,36 @@
 			color: var(--md-sys-color-on-surface-variant);
 			font-variant-numeric: tabular-nums;
 		}
-		.detail-page {
+		.detail-backdrop {
 			position: fixed;
 			inset: 0;
 			z-index: 40;
+			background-color: rgba(0, 0, 0, 0.5);
+			display: flex;
+			align-items: flex-end;
+		}
+		.detail-sheet {
+			width: 100%;
+			max-height: 88vh;
 			background-color: var(--md-sys-color-surface);
+			border-radius: 20px 20px 0 0;
 			display: flex;
 			flex-direction: column;
+			overflow: hidden;
+		}
+		.detail-sheet-handle {
+			width: 36px;
+			height: 4px;
+			border-radius: 2px;
+			background-color: var(--md-sys-color-outline-variant);
+			margin: 10px auto 0;
+			flex-shrink: 0;
 		}
 		.detail-header {
 			display: flex;
 			align-items: center;
 			gap: 4px;
-			padding: 10px 8px;
+			padding: 8px 8px 10px;
 			border-bottom: 1px solid var(--md-sys-color-outline-variant);
 			flex-shrink: 0;
 		}
@@ -1069,7 +1086,7 @@
 		.detail-body {
 			flex-grow: 1;
 			overflow-y: auto;
-			padding: 16px;
+			padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
 		}
 		.detail-hero {
 			height: 150px;
@@ -1693,37 +1710,40 @@
 	</main>
 
 	{#if viewingItem}
-		<div
-			bind:this={detailBackdrop}
-			class="detail-page"
-			role="dialog"
-			aria-label="{viewingItem.name} details"
-			tabindex="-1"
-			onkeydown={(e) => {
-				if (e.key === 'Escape') closeDetail();
-			}}
-			transition:fly={{ x: 32, duration: 200 }}
-		>
-			<div class="detail-header">
-				<button class="btn-icon" onclick={closeDetail} aria-label="Back to list">
-					<i class="material-icons">arrow_back</i>
-				</button>
-				<h2>{viewingItem.name}</h2>
-				<button
-					class="btn-icon"
-					onclick={() => viewingItem && editFromDetail(viewingItem)}
-					aria-label="Edit Item"
-				>
-					<i class="material-icons">edit</i>
-				</button>
-				<button
-					class="btn-icon btn-icon-danger"
-					onclick={() => viewingItem && deleteFromDetail(viewingItem)}
-					aria-label="Delete Item"
-				>
-					<i class="material-icons">delete</i>
-				</button>
-			</div>
+		<div class="detail-backdrop" transition:fade={{ duration: 150 }} onclick={closeDetail}>
+			<div
+				bind:this={detailBackdrop}
+				class="detail-sheet"
+				role="dialog"
+				aria-label="{viewingItem.name} details"
+				tabindex="-1"
+				onkeydown={(e) => {
+					if (e.key === 'Escape') closeDetail();
+				}}
+				onclick={(e) => e.stopPropagation()}
+				transition:fly={{ y: 400, duration: 220 }}
+			>
+				<div class="detail-sheet-handle"></div>
+				<div class="detail-header">
+					<button class="btn-icon" onclick={closeDetail} aria-label="Back to list">
+						<i class="material-icons">arrow_back</i>
+					</button>
+					<h2>{viewingItem.name}</h2>
+					<button
+						class="btn-icon"
+						onclick={() => viewingItem && editFromDetail(viewingItem)}
+						aria-label="Edit Item"
+					>
+						<i class="material-icons">edit</i>
+					</button>
+					<button
+						class="btn-icon btn-icon-danger"
+						onclick={() => viewingItem && deleteFromDetail(viewingItem)}
+						aria-label="Delete Item"
+					>
+						<i class="material-icons">delete</i>
+					</button>
+				</div>
 
 			<div class="detail-body">
 				{#if viewingItem.photos && viewingItem.photos.length > 0}
@@ -1817,6 +1837,7 @@
 				{/if}
 			</div>
 		</div>
+	</div>
 	{/if}
 
 	<button class="fab {items.length === 0 ? 'fab-pulse' : ''}" onclick={handleNew} aria-label="Add New Item">
