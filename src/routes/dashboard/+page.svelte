@@ -1107,10 +1107,17 @@
 			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 		}
 		.detail-sku {
+			display: inline-flex;
+			align-items: center;
 			margin: 0 0 12px;
+			padding: 3px 10px;
+			border-radius: 8px;
+			background-color: var(--md-sys-color-surface-variant);
 			font-family: 'Roboto Mono', monospace;
-			font-size: 0.8125rem;
-			color: var(--md-sys-color-on-surface-variant);
+			font-size: 0.9375rem;
+			font-weight: 600;
+			letter-spacing: 0.04em;
+			color: var(--md-sys-color-on-surface);
 		}
 		.detail-chip-row {
 			display: flex;
