@@ -1128,6 +1128,7 @@
 		.detail-sheet {
 			width: 100%;
 			max-height: 88vh;
+			max-height: 88dvh;
 			background-color: var(--md-sys-color-surface);
 			border-radius: 20px 20px 0 0;
 			display: flex;
@@ -1459,7 +1460,16 @@
 			width: 100%;
 			max-width: 400px;
 			box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+			/* vh is the full screen height and does not shrink when the on-screen
+			   keyboard opens on many mobile browsers -- a modal full of text
+			   inputs (this one) could then be sized taller than what's actually
+			   visible above the keyboard, pushing its own Cancel/Save buttons
+			   out of reach. dvh (dynamic viewport height) accounts for the
+			   keyboard on browsers that support it; vh is kept first as a
+			   fallback for older browsers that don't understand dvh, since an
+			   unsupported value is simply ignored, leaving the vh one in effect. */
 			max-height: 90vh;
+			max-height: 90dvh;
 			overflow-y: auto;
 		}
 		.modal-header {
