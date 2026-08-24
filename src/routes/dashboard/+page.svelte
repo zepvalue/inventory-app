@@ -598,23 +598,38 @@
 		}
 		.top-bar {
 			background-color: var(--md-sys-color-surface);
-			padding: 16px;
+			padding: 12px 16px;
 			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 			display: flex;
-			justify-content: space-between;
-			align-items: center;
+			flex-direction: column;
+			gap: 8px;
 			position: sticky;
 			top: 0;
 			z-index: 10;
 		}
+		.top-bar-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 8px;
+		}
+		.top-bar-title {
+			display: flex;
+			align-items: baseline;
+			gap: 8px;
+			min-width: 0;
+		}
 		.top-bar h1 {
-			font-size: 1.5rem;
-			font-weight: 500;
+			font-size: 1.375rem;
+			font-weight: 600;
 			margin: 0;
+		}
+		.top-bar-status-row {
+			min-height: 28px;
 		}
 		.top-bar-actions {
 			display: flex;
-			gap: 8px;
+			gap: 4px;
 			align-items: center;
 		}
 		main {
@@ -761,17 +776,26 @@
 			background-color: #ffcdd2;
 			color: #b71c1c;
 		}
-		.status-chip.source-chip {
-			font-family: 'Roboto Mono', monospace;
+		.source-badge {
+			display: inline-flex;
+			align-items: center;
 			flex-shrink: 0;
+			padding: 1px 7px;
+			border-radius: 10px;
+			font-family: 'Roboto Mono', monospace;
+			font-size: 0.6875rem;
+			font-weight: 600;
+			letter-spacing: 0.02em;
+			border: 1px solid currentColor;
+			background: none;
+			position: relative;
+			top: -1px;
 		}
-		.status-chip.scat {
-			background-color: var(--md-sys-color-secondary-container);
-			color: var(--md-sys-color-on-secondary-container);
+		.source-badge.scat {
+			color: var(--md-sys-color-secondary);
 		}
-		.status-chip.scab {
-			background-color: var(--md-sys-color-tertiary-container);
-			color: var(--md-sys-color-on-tertiary-container);
+		.source-badge.scab {
+			color: var(--md-sys-color-tertiary);
 		}
 		.source-chip-offline-mark {
 			margin-left: 2px;
@@ -1005,56 +1029,20 @@
 
 <div class="app-container">
 	<header class="top-bar">
-		<div style="display:flex; align-items:center; gap:8px;">
-			<span
-				class="status-chip source-chip {currentSource === 'SCAB' ? 'scab' : 'scat'}"
-				title={currentSourceIsServerConfirmed
-					? `New items are currently tagged source: ${currentSource} (server-confirmed)`
-					: `New items are currently tagged source: ${currentSource} (device estimate — offline)`}
-			>
-				{currentSource}{#if !currentSourceIsServerConfirmed}<span class="source-chip-offline-mark"
-						>*</span
-					>{/if}
-			</span>
-			<h1>Inventory</h1>
-			<span
-				class="status-chip {!$online
-					? 'error'
-					: $syncing
-						? 'pending'
-						: $pendingCount > 0
-							? 'local'
-							: 'synced'}"
-				title={$lastSyncError ?? ''}
-			>
-				{#if !$online}
-					Offline
-				{:else if $syncing}
-					Syncing…
-				{:else if $pendingCount > 0}
-					{$pendingCount} pending
-				{:else}
-					Synced
-				{/if}
-			</span>
-		</div>
-		<div class="top-bar-actions">
-			<button onclick={fetchItems} class="btn-icon" aria-label="Refresh items" disabled={$syncing}>
-				<i class="material-icons" style={$syncing ? 'animation: spin 1s linear infinite;' : ''}
-					>refresh</i
+		<div class="top-bar-row">
+			<div class="top-bar-title">
+				<h1>Inventory</h1>
+				<span
+					class="source-badge {currentSource === 'SCAB' ? 'scab' : 'scat'}"
+					title={currentSourceIsServerConfirmed
+						? `New items are currently tagged source: ${currentSource} (server-confirmed)`
+						: `New items are currently tagged source: ${currentSource} (device estimate — offline)`}
 				>
-			</button>
-			<button
-				class="btn btn-filled"
-				onclick={syncAllItems}
-				disabled={$pendingCount === 0 || $syncing}
-			>
-				{#if $syncing}
-					Syncing...
-				{:else}
-					Sync All ({$pendingCount})
-				{/if}
-			</button>
+					{currentSource}{#if !currentSourceIsServerConfirmed}<span
+							class="source-chip-offline-mark">*</span
+						>{/if}
+				</span>
+			</div>
 			<div class="dropdown">
 				<button onclick={() => (showMenu = !showMenu)} class="btn-icon" aria-label="More options">
 					<i class="material-icons">more_vert</i>
@@ -1087,6 +1075,46 @@
 					</div>
 					<div class="fixed inset-0 z-10" onclick={() => (showMenu = false)}></div>
 				{/if}
+			</div>
+		</div>
+		<div class="top-bar-row top-bar-status-row">
+			<span
+				class="status-chip {!$online
+					? 'error'
+					: $syncing
+						? 'pending'
+						: $pendingCount > 0
+							? 'local'
+							: 'synced'}"
+				title={$lastSyncError ?? ''}
+			>
+				{#if !$online}
+					Offline
+				{:else if $syncing}
+					Syncing…
+				{:else if $pendingCount > 0}
+					{$pendingCount} pending
+				{:else}
+					Synced
+				{/if}
+			</span>
+			<div class="top-bar-actions">
+				<button onclick={fetchItems} class="btn-icon" aria-label="Refresh items" disabled={$syncing}>
+					<i class="material-icons" style={$syncing ? 'animation: spin 1s linear infinite;' : ''}
+						>refresh</i
+					>
+				</button>
+				<button
+					class="btn btn-filled"
+					onclick={syncAllItems}
+					disabled={$pendingCount === 0 || $syncing}
+				>
+					{#if $syncing}
+						Syncing...
+					{:else}
+						Sync All ({$pendingCount})
+					{/if}
+				</button>
 			</div>
 		</div>
 	</header>
