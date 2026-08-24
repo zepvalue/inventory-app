@@ -16,7 +16,7 @@
 <div class="app-shell">
     <!-- The <slot /> tag is where your page content (like +page.svelte) will be rendered. -->
     <slot />
-    <footer class="app-footer">Powered by ZepValue</footer>
+    <footer class="app-footer">Powered by <a class="app-footer-link" href="https://zepvalue.github.io" target="_blank" rel="noopener noreferrer">ZepValue</a></footer>
 </div>
 </MdTheme>
 
@@ -33,5 +33,15 @@
         padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
         font-size: 12px;
         color: var(--md-sys-color-on-surface-variant);
+    }
+
+    .app-footer-link {
+        color: var(--md-sys-color-primary);
+        text-decoration: none;
+    }
+
+    .app-footer-link:hover,
+    .app-footer-link:focus-visible {
+        text-decoration: underline;
     }
 </style>
