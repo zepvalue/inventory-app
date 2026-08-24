@@ -1,6 +1,7 @@
 import { query, mutation } from './_generated/server';
 import { v } from 'convex/values';
 import { itemFields } from './schema';
+import { sourceForCreationTime } from './source';
 import type { Id } from './_generated/dataModel';
 
 // Item CRUD. These mirror the old Express contract the sync engine expects:
@@ -65,7 +66,9 @@ export const list = query({
 export const create = mutation({
 	args: itemFields,
 	handler: async (ctx, args) => {
-		const id = await ctx.db.insert('items', args);
+		// `source` is stamped server-side from the creation instant, not taken
+		// from the client — see convex/source.ts for the SCAT/SCAB cutover.
+		const id = await ctx.db.insert('items', { ...args, source: sourceForCreationTime() });
 		return await ctx.db.get(id);
 	}
 });

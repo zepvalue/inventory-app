@@ -11,7 +11,12 @@ export const itemFields = {
 	description: v.string(),
 	category: v.optional(v.string()),
 	photos: v.array(v.string()),
-	is_active: v.boolean()
+	is_active: v.boolean(),
+	// Stamped server-side on create (see convex/source.ts) — "SCAT" for items
+	// created before the 2026-09-02T00:00:00 cutover, "SCAB" on/after it.
+	// Optional so pre-existing rows (created before this field existed) don't
+	// need a migration.
+	source: v.optional(v.string())
 };
 
 export default defineSchema({

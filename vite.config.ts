@@ -31,6 +31,8 @@ export default defineConfig({
     test: {
         environment: 'jsdom',
         globals: true,
-        include: ['src/**/*.{test,spec}.{js,ts}']
+        // convex/** included so backend unit tests (e.g. convex/source.test.ts)
+        // run under `npm test` alongside the frontend ones.
+        include: ['src/**/*.{test,spec}.{js,ts}', 'convex/**/*.{test,spec}.{js,ts}']
     }
 });
