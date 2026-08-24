@@ -62,11 +62,14 @@
 	// SCAT/SCAB indicator — reflects which source tag a *new* item created
 	// right now would get (see convex/source.ts for the cutover instant).
 	// Sourced from the Convex server's clock (items:currentSource), not the
-	// device's, so a wrong or unset local clock/timezone can't show a
-	// misleading tag. Falls back to a local estimate — clearly labeled — only
-	// when offline, since there's no server to ask; refreshed on load, on
-	// reconnect, and every minute so it flips live near the cutover.
-	let currentSource = $state(sourceForCreationTime());
+	// device's, so a wrong/spoofed local clock can't show a misleading tag.
+	// Starts as `null` (loading) rather than seeding from the device clock —
+	// seeding locally first caused a visible flash-then-correct whenever the
+	// device clock disagreed with the server. Falls back to a local
+	// estimate — clearly labeled — only once we know we're actually offline,
+	// since there's no server to ask then. Refreshed on load, on reconnect,
+	// and every minute so it flips live near the cutover.
+	let currentSource = $state<string | null>(null);
 	let currentSourceIsServerConfirmed = $state(false);
 	async function refreshCurrentSource() {
 		try {
@@ -1032,16 +1035,18 @@
 		<div class="top-bar-row">
 			<div class="top-bar-title">
 				<h1>Inventory</h1>
-				<span
-					class="source-badge {currentSource === 'SCAB' ? 'scab' : 'scat'}"
-					title={currentSourceIsServerConfirmed
-						? `New items are currently tagged source: ${currentSource} (server-confirmed)`
-						: `New items are currently tagged source: ${currentSource} (device estimate — offline)`}
-				>
-					{currentSource}{#if !currentSourceIsServerConfirmed}<span
-							class="source-chip-offline-mark">*</span
-						>{/if}
-				</span>
+				{#if currentSource}
+					<span
+						class="source-badge {currentSource === 'SCAB' ? 'scab' : 'scat'}"
+						title={currentSourceIsServerConfirmed
+							? `New items are currently tagged source: ${currentSource} (server-confirmed)`
+							: `New items are currently tagged source: ${currentSource} (device estimate — offline)`}
+					>
+						{currentSource}{#if !currentSourceIsServerConfirmed}<span
+								class="source-chip-offline-mark">*</span
+							>{/if}
+					</span>
+				{/if}
 			</div>
 			<div class="dropdown">
 				<button onclick={() => (showMenu = !showMenu)} class="btn-icon" aria-label="More options">
