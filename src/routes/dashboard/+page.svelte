@@ -69,16 +69,16 @@
 	let selectedItem = $state<Item | null>(null);
 	let formData = $state<Item | null>(null);
 	let showMenu = $state(false);
+	let activeCategoryFilter = $state<string | null>(null);
 
-	// Groups the flat item list into category sections, sorted alphabetically
-	// within each group. Without this, items render in whatever order the
-	// local DB returns them (most-recently-changed first), which reads as
-	// arbitrary once there are more than a handful — grouping gives the list
-	// real structure to scan by, the way a physical inventory would be
-	// organized on shelves. Category order follows the app's own `categories`
-	// list (same order as the add/edit form) rather than alphabetical, since
-	// that's the order the person already thinks in; anything outside that
-	// list (or blank) falls into "Uncategorized" at the end.
+	// Groups the flat item list into category buckets purely to drive the
+	// filter chip bar (name, color, count per category) — items render as a
+	// single flat, alphabetically-sorted list filtered down to whichever chip
+	// (if any) is active, rather than always-on grouped sections. Category
+	// order follows the app's own `categories` list (same order as the
+	// add/edit form) rather than alphabetical, since that's the order the
+	// person already thinks in; anything outside that list (or blank) becomes
+	// an "Uncategorized" chip at the end.
 	interface CategoryGroup {
 		category: string;
 		color: string;
@@ -106,7 +106,23 @@
 			items: byCategory.get(key)!.sort((a, b) => a.name.localeCompare(b.name))
 		}));
 	}
-	let groupedItems = $derived(groupItemsByCategory(items));
+	let categoryFilters = $derived(groupItemsByCategory(items));
+
+	// The flat list actually rendered: every item if no filter is active,
+	// otherwise only items in the selected category — always sorted
+	// alphabetically by name so the order stays predictable either way.
+	let filteredItems = $derived(
+		(activeCategoryFilter
+			? items.filter((i) => (i.category?.trim() || 'Uncategorized') === activeCategoryFilter)
+			: items
+		)
+			.slice()
+			.sort((a, b) => a.name.localeCompare(b.name))
+	);
+
+	function toggleCategoryFilter(category: string) {
+		activeCategoryFilter = activeCategoryFilter === category ? null : category;
+	}
 
 	// Reload the on-screen list from the local (offline-first) database.
 	async function refresh() {
@@ -865,6 +881,12 @@
 			font-family: 'Roboto Mono', monospace;
 			font-size: 0.6875rem;
 		}
+		.item-card-category-dot {
+			width: 6px;
+			height: 6px;
+			border-radius: 50%;
+			flex-shrink: 0;
+		}
 		.item-card-status-dot {
 			width: 8px;
 			height: 8px;
@@ -882,34 +904,46 @@
 			color: var(--md-sys-color-outline);
 			font-size: 20px;
 		}
-		.category-section {
-			margin-bottom: 18px;
-		}
-		.category-section:last-child {
-			margin-bottom: 0;
-		}
-		.category-header {
+		.filter-bar {
 			display: flex;
-			align-items: center;
 			gap: 8px;
-			padding: 4px 2px 8px;
+			overflow-x: auto;
+			padding: 2px 2px 12px;
+			-ms-overflow-style: none;
+			scrollbar-width: none;
 		}
-		.category-dot {
-			width: 9px;
-			height: 9px;
-			border-radius: 50%;
+		.filter-bar::-webkit-scrollbar {
+			display: none;
+		}
+		.filter-chip {
 			flex-shrink: 0;
-		}
-		.category-header h2 {
-			margin: 0;
+			display: inline-flex;
+			align-items: center;
+			gap: 5px;
+			padding: 6px 12px;
+			border-radius: 16px;
+			border: 1.5px solid var(--filter-color, var(--md-sys-color-outline-variant));
+			background: none;
+			color: var(--filter-color, var(--md-sys-color-on-surface-variant));
+			font-family: inherit;
 			font-size: 0.8125rem;
-			font-weight: 600;
-			letter-spacing: 0.02em;
-			color: var(--md-sys-color-on-surface-variant);
+			font-weight: 500;
+			cursor: pointer;
+			transition:
+				background-color 150ms ease,
+				color 150ms ease;
 		}
-		.category-count {
-			font-size: 0.75rem;
-			color: var(--md-sys-color-outline);
+		.filter-chip.active {
+			background-color: var(--filter-color, var(--md-sys-color-secondary-container));
+			border-color: var(--filter-color, var(--md-sys-color-secondary-container));
+			color: var(--filter-chip-active-text, #fff);
+		}
+		.filter-chip:first-child.active {
+			color: var(--md-sys-color-on-secondary-container);
+		}
+		.filter-chip-count {
+			font-size: 0.6875rem;
+			opacity: 0.75;
 			font-variant-numeric: tabular-nums;
 		}
 		.detail-page {
@@ -1478,45 +1512,66 @@
 				<p class="empty-state-hint">Tap + to add your first item.</p>
 			</div>
 		{:else}
-			<div class="items-list">
-				{#each groupedItems as group (group.category)}
-					<div class="category-section">
-						<div class="category-header">
-							<span class="category-dot" style="background-color: {group.color}"></span>
-							<h2>{group.category}</h2>
-							<span class="category-count">{group.items.length}</span>
-						</div>
-						{#each group.items as item (item.id)}
-							<button
-								class="item-card"
-								onclick={() => openDetail(item)}
-								in:fly={{ y: 20, duration: 250, delay: Math.min(200, 30) }}
-							>
-								<div class="item-card-thumb">
-									{#if item.photos && item.photos.length > 0}
-										<img src={photoSrc(item.photos, item.photoUrls, 0)} alt="" />
-									{:else}
-										<i class="material-icons">inventory_2</i>
-									{/if}
-								</div>
-								<div class="item-card-heading">
-									<h3>{item.name}</h3>
-									<p class="item-card-meta">
-										<span class="item-card-sku">{item.sku || 'No SKU'}</span>
-									</p>
-								</div>
-								{#if item.syncStatus && item.syncStatus !== 'synced'}
-									<span
-										class="item-card-status-dot {item.syncStatus}"
-										title="Sync status: {item.syncStatus}"
-									></span>
-								{/if}
-								<i class="material-icons item-card-chevron" aria-hidden="true">chevron_right</i>
-							</button>
-						{/each}
-					</div>
+			<div class="filter-bar">
+				<button
+					class="filter-chip {activeCategoryFilter === null ? 'active' : ''}"
+					onclick={() => (activeCategoryFilter = null)}
+				>
+					All <span class="filter-chip-count">{items.length}</span>
+				</button>
+				{#each categoryFilters as group (group.category)}
+					<button
+						class="filter-chip {activeCategoryFilter === group.category ? 'active' : ''}"
+						style="--filter-color: {group.color}"
+						onclick={() => toggleCategoryFilter(group.category)}
+					>
+						{group.category} <span class="filter-chip-count">{group.items.length}</span>
+					</button>
 				{/each}
 			</div>
+
+			{#if filteredItems.length === 0}
+				<div class="empty-state">
+					<i class="material-icons empty-state-icon">filter_alt_off</i>
+					<p class="empty-state-title">No items in this category</p>
+					<p class="empty-state-hint">Try a different filter.</p>
+				</div>
+			{:else}
+				<div class="items-list">
+					{#each filteredItems as item (item.id)}
+						<button
+							class="item-card"
+							onclick={() => openDetail(item)}
+							in:fly={{ y: 20, duration: 250, delay: Math.min(200, 30) }}
+						>
+							<div class="item-card-thumb">
+								{#if item.photos && item.photos.length > 0}
+									<img src={photoSrc(item.photos, item.photoUrls, 0)} alt="" />
+								{:else}
+									<i class="material-icons">inventory_2</i>
+								{/if}
+							</div>
+							<div class="item-card-heading">
+								<h3>{item.name}</h3>
+								<p class="item-card-meta">
+									<span
+										class="item-card-category-dot"
+										style="background-color: {categoryColor(item.category || 'Uncategorized')}"
+									></span>
+									<span class="item-card-sku">{item.sku || 'No SKU'}</span>
+								</p>
+							</div>
+							{#if item.syncStatus && item.syncStatus !== 'synced'}
+								<span
+									class="item-card-status-dot {item.syncStatus}"
+									title="Sync status: {item.syncStatus}"
+								></span>
+							{/if}
+							<i class="material-icons item-card-chevron" aria-hidden="true">chevron_right</i>
+						</button>
+					{/each}
+				</div>
+			{/if}
 		{/if}
 	</main>
 
