@@ -1144,6 +1144,8 @@
 			flex-shrink: 0;
 			cursor: grab;
 			touch-action: none;
+			user-select: none;
+			-webkit-user-select: none;
 		}
 		.detail-sheet-handle::after {
 			content: '';
@@ -1160,6 +1162,9 @@
 			border-bottom: 1px solid var(--md-sys-color-outline-variant);
 			flex-shrink: 0;
 			touch-action: none;
+			user-select: none;
+			-webkit-user-select: none;
+			-webkit-touch-callout: none;
 		}
 		.detail-header h2 {
 			flex-grow: 1;
@@ -1171,6 +1176,8 @@
 			text-overflow: ellipsis;
 			white-space: nowrap;
 			padding: 0 4px;
+			-webkit-user-select: none;
+			user-select: none;
 		}
 		.detail-body {
 			flex-grow: 1;
