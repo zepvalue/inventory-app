@@ -1088,7 +1088,7 @@
 		.filter-menu {
 			left: 0;
 			right: auto;
-			min-width: 220px;
+			min-width: 240px;
 			max-height: 340px;
 			overflow-y: auto;
 		}
@@ -1143,6 +1143,8 @@
 			color: var(--md-sys-color-on-surface);
 		}
 		.filter-menu-count {
+			flex-shrink: 0;
+			white-space: nowrap;
 			font-size: 0.75rem;
 			color: var(--md-sys-color-on-surface-variant);
 			font-variant-numeric: tabular-nums;
