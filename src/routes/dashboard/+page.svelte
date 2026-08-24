@@ -1194,6 +1194,30 @@
 			height: 100%;
 			object-fit: cover;
 		}
+		.detail-hero-placeholder {
+			width: 100%;
+			height: 100%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.form-hero-placeholder {
+			flex-direction: column;
+			gap: 6px;
+		}
+		.form-hero-placeholder .material-icons {
+			font-size: 40px;
+			opacity: 0.7;
+		}
+		.form-hero-placeholder span {
+			font-size: 0.8125rem;
+			font-weight: 500;
+		}
+		.form-label-with-dot {
+			display: flex !important;
+			align-items: center;
+			gap: 6px;
+		}
 		.thumbnail {
 			cursor: pointer;
 		}
@@ -2317,10 +2341,41 @@
 					</div>
 					<form onsubmit={handleSubmit} class="modal-form">
 						<div class="modal-scroll-body">
+							<div
+								class="detail-hero"
+								style={!formData.photos.length
+									? `background-color: ${categoryColor(formData.category || 'Uncategorized')}22;`
+									: ''}
+							>
+								{#if formData.photos.length > 0}
+									<img
+										class="detail-hero-image"
+										src={photoSrc(formData.photos, formData.photoUrls, 0)}
+										alt={formData.name || 'Item preview'}
+									/>
+								{:else}
+									<div
+										class="detail-hero-placeholder form-hero-placeholder"
+										style="color: {categoryColor(formData.category || 'Uncategorized')};"
+									>
+										<i class="material-icons">add_a_photo</i>
+										<span>No photo yet</span>
+									</div>
+								{/if}
+							</div>
+
 							<p class="detail-section-title">Details</p>
 							<div class="form-row">
 								<div class="form-field">
-									<label for="category">Category</label>
+									<label for="category" class="form-label-with-dot">
+										<span
+											class="detail-category-dot"
+											style="background-color: {categoryColor(
+												formData.category || 'Uncategorized'
+											)}"
+										></span>
+										Category
+									</label>
 									<select id="category" bind:value={formData.category} required>
 										{#each categories as category}
 											<option value={category}>{category}</option>
@@ -2356,19 +2411,21 @@
 
 							<p class="detail-section-title">Photos</p>
 							<div class="form-field">
-								<div class="photo-gallery">
-									{#each formData.photos as photo, index}
-										<div class="thumbnail">
-											<img
-												src={photoSrc(formData.photos, formData.photoUrls, index)}
-												alt={`Preview ${index + 1}`}
-											/>
-											<button type="button" class="remove-btn" onclick={() => removePhoto(index)}
-												>&times;</button
-											>
-										</div>
-									{/each}
-								</div>
+								{#if formData.photos.length > 0}
+									<div class="photo-gallery photo-gallery-compact">
+										{#each formData.photos as photo, index}
+											<div class="thumbnail">
+												<img
+													src={photoSrc(formData.photos, formData.photoUrls, index)}
+													alt={`Preview ${index + 1}`}
+												/>
+												<button type="button" class="remove-btn" onclick={() => removePhoto(index)}
+													>&times;</button
+												>
+											</div>
+										{/each}
+									</div>
+								{/if}
 								<div class="photo-actions" style="display: flex; gap: 8px; margin-top: 8px;">
 									<button type="button" onclick={startCamera} class="btn btn-text">
 										<i class="material-icons" style="vertical-align: middle; margin-right: 4px;"
