@@ -657,6 +657,8 @@
 			transition:
 				transform 150ms ease,
 				box-shadow 150ms ease;
+		}
+		.fab.fab-pulse {
 			animation: fabPulse 6s ease-in-out infinite;
 		}
 		.fab:hover {
@@ -667,23 +669,42 @@
 			transform: scale(0.94);
 			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 		}
+		.empty-state {
+			text-align: center;
+			padding: 4rem 1.5rem;
+			color: var(--md-sys-color-on-surface-variant);
+		}
+		.empty-state-icon {
+			font-size: 3.5rem;
+			color: var(--md-sys-color-outline);
+		}
+		.empty-state-title {
+			margin: 1rem 0 0.25rem;
+			font-size: 1.0625rem;
+			font-weight: 500;
+			color: var(--md-sys-color-on-surface);
+		}
+		.empty-state-hint {
+			margin: 0;
+			font-size: 0.875rem;
+		}
 		.item-card {
 			background-color: var(--md-sys-color-surface);
-			border-radius: 12px;
-			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-			padding: 16px;
-			margin-bottom: 12px;
+			border-radius: 16px;
+			box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+			padding: 16px 18px;
+			margin-bottom: 10px;
 			transition:
 				transform 200ms ease,
 				box-shadow 200ms ease;
 		}
 		.item-card:hover {
-			transform: translateY(-2px);
-			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+			transform: translateY(-1px);
+			box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
 		}
 		.item-card:active {
 			transform: translateY(0);
-			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+			box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 		}
 		.item-card-header {
 			display: flex;
@@ -691,41 +712,38 @@
 			align-items: flex-start;
 			gap: 8px;
 		}
+		.item-card-heading {
+			min-width: 0;
+		}
 		.item-card-header h3 {
-			font-size: 1.25rem;
+			font-size: 1.125rem;
 			font-weight: 500;
 			margin: 0;
-			flex-grow: 1;
+			overflow-wrap: break-word;
+		}
+		.item-card-meta {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			margin: 2px 0 0;
+			font-size: 0.8125rem;
+			color: var(--md-sys-color-on-surface-variant);
+		}
+		.item-card-sku {
+			font-family: 'Roboto Mono', monospace;
+			font-size: 0.75rem;
+		}
+		.item-card-dot {
+			opacity: 0.5;
+		}
+		.item-card-status {
+			margin-top: 10px;
 		}
 		.item-card-actions {
 			display: flex;
 			gap: 4px;
 			flex-shrink: 0;
 			align-items: center;
-		}
-		.item-card-body {
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 12px;
-			font-size: 0.875rem;
-			color: var(--md-sys-color-on-surface-variant);
-			padding-top: 12px;
-			border-top: 1px solid var(--md-sys-color-outline);
-			margin-top: 12px;
-		}
-		.item-card-body .label {
-			font-weight: 500;
-		}
-		.item-card-body .value {
-			font-family: 'Roboto Mono', monospace;
-			word-break: break-all;
-		}
-		.item-card-body .full-width {
-			grid-column: 1 / -1;
-		}
-		.item-card-body .value-description {
-			color: var(--md-sys-color-on-surface);
-			white-space: pre-wrap;
 		}
 		.item-photo-preview,
 		.form-photo-preview {
@@ -957,6 +975,14 @@
 		.btn-icon:active {
 			transform: scale(0.9);
 		}
+		.btn-icon-danger {
+			color: var(--md-sys-color-on-surface-variant);
+		}
+		.btn-icon-danger:hover,
+		.btn-icon-danger:focus-visible {
+			color: var(--md-sys-color-error);
+			background-color: var(--md-sys-color-error-container);
+		}
 		#scanner-container {
 			width: 100%;
 			height: 250px;
@@ -1126,17 +1152,26 @@
 
 	<main>
 		{#if items.length === 0}
-			<div style="text-align: center; padding: 3rem; color: #757575;">
-				<i class="material-icons" style="font-size: 4rem; color: #bdbdbd;">inventory_2</i>
-				<p style="margin-top: 1rem;">No items in inventory.</p>
-				<p>Click "Refresh" to load data or "+" to add a new item.</p>
+			<div class="empty-state">
+				<i class="material-icons empty-state-icon">inventory_2</i>
+				<p class="empty-state-title">No items yet</p>
+				<p class="empty-state-hint">Tap + to add your first item.</p>
 			</div>
 		{:else}
 			<div class="items-list">
 				{#each items as item (item.id)}
 					<div class="item-card" in:fly={{ y: 20, duration: 250, delay: Math.min(200, 30) }}>
 						<div class="item-card-header">
-							<h3>{item.name}</h3>
+							<div class="item-card-heading">
+								<h3>{item.name}</h3>
+								<p class="item-card-meta">
+									<span class="item-card-sku">{item.sku || 'No SKU'}</span>
+									{#if item.category}
+										<span class="item-card-dot" aria-hidden="true">&middot;</span>
+										<span>{item.category}</span>
+									{/if}
+								</p>
+							</div>
 							<div class="item-card-actions">
 								{#if item.syncStatus === 'pending' || item.syncStatus === 'error'}
 									<button class="btn-icon" onclick={() => syncItem(item)} aria-label="Sync Item">
@@ -1151,65 +1186,46 @@
 									><i class="material-icons">edit</i></button
 								>
 								<button
-									class="btn-icon"
+									class="btn-icon btn-icon-danger"
 									onclick={() => promptForDelete(item)}
-									aria-label="Delete Item"
-									><i class="material-icons" style="color: var(--md-sys-color-error)">delete</i
-									></button
+									aria-label="Delete Item"><i class="material-icons">delete</i></button
 								>
 							</div>
 						</div>
-						<div class="item-card-body">
-							<div>
-								<p class="label">SKU</p>
-								<p class="value">{item.sku || 'N/A'}</p>
+
+						{#if item.syncStatus && item.syncStatus !== 'synced'}
+							<div class="item-card-status">
+								<span class="status-chip {item.syncStatus}">{item.syncStatus}</span>
 							</div>
-							<div>
-								<p class="label">Category</p>
-								<p class="value">{item.category || 'N/A'}</p>
-							</div>
-							<div class="full-width">
-								<p class="label">Sync Status</p>
-								<p>
-									<span class="status-chip {item.syncStatus ?? 'pending'}"
-										>{item.syncStatus ?? 'pending'}</span
-									>
-								</p>
-							</div>
-							<div class="full-width">
-								<p class="label">Photos</p>
-								{#if item.photos && item.photos.length > 0}
-									<div class="photo-gallery">
-										{#each item.photos as photo, i}
-											<div class="thumbnail">
-												<img
-													src={photoSrc(item.photos, item.photoUrls, i)}
-													alt="{item.name} preview {i + 1}"
-												/>
-												<button
-													class="btn-icon"
-													style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.5);"
-													onclick={() =>
-														downloadPhoto(photoSrc(item.photos, item.photoUrls, i), item.sku, i)}
-												>
-													<i class="material-icons" style="color:white; font-size:16px;">download</i
-													>
-												</button>
-											</div>
-										{/each}
+						{/if}
+
+						{#if item.photos && item.photos.length > 0}
+							<div class="photo-gallery">
+								{#each item.photos as photo, i}
+									<div class="thumbnail">
+										<img
+											src={photoSrc(item.photos, item.photoUrls, i)}
+											alt="{item.name} preview {i + 1}"
+										/>
+										<button
+											class="btn-icon"
+											style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.5);"
+											onclick={() =>
+												downloadPhoto(photoSrc(item.photos, item.photoUrls, i), item.sku, i)}
+										>
+											<i class="material-icons" style="color:white; font-size:16px;">download</i>
+										</button>
 									</div>
-								{:else}
-									<p class="value">No Photos</p>
-								{/if}
+								{/each}
 							</div>
-						</div>
+						{/if}
 					</div>
 				{/each}
 			</div>
 		{/if}
 	</main>
 
-	<button class="fab" onclick={handleNew} aria-label="Add New Item">
+	<button class="fab {items.length === 0 ? 'fab-pulse' : ''}" onclick={handleNew} aria-label="Add New Item">
 		<i class="material-icons">add</i>
 	</button>
 
