@@ -30,4 +30,12 @@ describe('sourceForCreationTime', () => {
 		expect(sourceForCreationTime(cutoverMs - 1)).toBe(SCAT);
 		expect(sourceForCreationTime(cutoverMs)).toBe(SCAB);
 	});
+
+	it('cutover is midnight Pacific Daylight Time (UTC-7) on Sept 2 2026, not UTC midnight', () => {
+		// 2026-09-02T00:00:00 PDT == 2026-09-02T07:00:00Z
+		expect(sourceForCreationTime(new Date('2026-09-02T06:59:59.999Z'))).toBe(SCAT);
+		expect(sourceForCreationTime(new Date('2026-09-02T07:00:00.000Z'))).toBe(SCAB);
+		// Sanity check: UTC midnight itself is still SCAT (7 hours early in Pacific time)
+		expect(sourceForCreationTime(new Date('2026-09-02T00:00:00.000Z'))).toBe(SCAT);
+	});
 });
