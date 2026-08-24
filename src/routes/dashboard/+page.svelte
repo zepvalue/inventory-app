@@ -178,6 +178,34 @@
 	let mediaStream = $state<MediaStream | null>(null);
 	let itemToDelete = $state<Item | null>(null);
 	let deleteModalBackdrop = $state<HTMLElement | null>(null);
+	let viewingItem = $state<Item | null>(null);
+	let detailBackdrop = $state<HTMLElement | null>(null);
+
+	// Keeps the open detail page's data current if a background sync/refresh
+	// updates that same item underneath it (e.g. syncStatus flips once the
+	// push completes) — otherwise the detail page would keep showing a
+	// stale snapshot taken at the moment it was opened.
+	$effect(() => {
+		if (viewingItem?.id == null) return;
+		const updated = items.find((i) => i.id === viewingItem?.id);
+		if (updated && updated !== viewingItem) viewingItem = updated;
+	});
+
+	function openDetail(item: Item) {
+		viewingItem = item;
+		tick().then(() => detailBackdrop?.focus());
+	}
+	function closeDetail() {
+		viewingItem = null;
+	}
+	function editFromDetail(item: Item) {
+		closeDetail();
+		handleEdit(item);
+	}
+	function deleteFromDetail(item: Item) {
+		closeDetail();
+		promptForDelete(item);
+	}
 
 	// --- LIFECYCLE & SKU GENERATION ---
 	$effect(() => {
@@ -750,11 +778,19 @@
 			font-size: 0.875rem;
 		}
 		.item-card {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			width: 100%;
 			background-color: var(--md-sys-color-surface);
+			border: none;
 			border-radius: 14px;
 			box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-			padding: 10px 14px;
+			padding: 8px 10px;
 			margin-bottom: 6px;
+			font-family: inherit;
+			text-align: left;
+			cursor: pointer;
 			transition:
 				transform 200ms ease,
 				box-shadow 200ms ease;
@@ -767,20 +803,39 @@
 			transform: translateY(0);
 			box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 		}
-		.item-card-header {
+		.item-card-thumb {
 			display: flex;
-			justify-content: space-between;
 			align-items: center;
-			gap: 8px;
+			justify-content: center;
+			flex-shrink: 0;
+			width: 44px;
+			height: 44px;
+			border-radius: 10px;
+			background-color: var(--md-sys-color-surface-variant);
+			color: var(--md-sys-color-on-surface-variant);
+			overflow: hidden;
+		}
+		.item-card-thumb img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		.item-card-thumb .material-icons {
+			font-size: 20px;
+			opacity: 0.6;
 		}
 		.item-card-heading {
 			min-width: 0;
+			flex-grow: 1;
 		}
-		.item-card-header h3 {
+		.item-card-heading h3 {
 			font-size: 1rem;
 			font-weight: 600;
 			margin: 0;
-			overflow-wrap: break-word;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			color: var(--md-sys-color-on-surface);
 		}
 		.item-card-meta {
 			display: flex;
@@ -793,6 +848,23 @@
 		.item-card-sku {
 			font-family: 'Roboto Mono', monospace;
 			font-size: 0.6875rem;
+		}
+		.item-card-status-dot {
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			flex-shrink: 0;
+		}
+		.item-card-status-dot.pending {
+			background-color: #ff6f00;
+		}
+		.item-card-status-dot.error {
+			background-color: var(--md-sys-color-error);
+		}
+		.item-card-chevron {
+			flex-shrink: 0;
+			color: var(--md-sys-color-outline);
+			font-size: 20px;
 		}
 		.category-section {
 			margin-bottom: 18px;
@@ -824,18 +896,69 @@
 			color: var(--md-sys-color-outline);
 			font-variant-numeric: tabular-nums;
 		}
-		.item-card-status {
-			margin-top: 6px;
-		}
-		.item-card-actions {
+		.detail-page {
+			position: fixed;
+			inset: 0;
+			z-index: 40;
+			background-color: var(--md-sys-color-surface);
 			display: flex;
-			gap: 0;
-			flex-shrink: 0;
-			align-items: center;
+			flex-direction: column;
 		}
-		.item-card-actions .btn-icon {
-			width: 34px;
-			height: 34px;
+		.detail-header {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+			padding: 10px 8px;
+			border-bottom: 1px solid var(--md-sys-color-outline-variant);
+			flex-shrink: 0;
+		}
+		.detail-header h2 {
+			flex-grow: 1;
+			min-width: 0;
+			margin: 0;
+			font-size: 1.0625rem;
+			font-weight: 600;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			padding: 0 4px;
+		}
+		.detail-body {
+			flex-grow: 1;
+			overflow-y: auto;
+			padding: 16px;
+		}
+		.detail-section {
+			margin-bottom: 20px;
+		}
+		.detail-section:last-child {
+			margin-bottom: 0;
+		}
+		.detail-label {
+			margin: 0 0 4px;
+			font-size: 0.75rem;
+			font-weight: 600;
+			color: var(--md-sys-color-on-surface-variant);
+		}
+		.detail-value {
+			margin: 0;
+			font-size: 0.9375rem;
+			color: var(--md-sys-color-on-surface);
+		}
+		.detail-value.mono {
+			font-family: 'Roboto Mono', monospace;
+		}
+		.detail-value-description {
+			white-space: pre-wrap;
+		}
+		.detail-value.detail-empty {
+			color: var(--md-sys-color-on-surface-variant);
+			font-style: italic;
+		}
+		.detail-sync-row {
+			display: flex;
+			align-items: center;
+			gap: 4px;
 		}
 		.item-photo-preview,
 		.form-photo-preview {
@@ -1271,74 +1394,146 @@
 							<span class="category-count">{group.items.length}</span>
 						</div>
 						{#each group.items as item (item.id)}
-							<div class="item-card" in:fly={{ y: 20, duration: 250, delay: Math.min(200, 30) }}>
-								<div class="item-card-header">
-									<div class="item-card-heading">
-										<h3>{item.name}</h3>
-										<p class="item-card-meta">
-											<span class="item-card-sku">{item.sku || 'No SKU'}</span>
-										</p>
-									</div>
-									<div class="item-card-actions">
-										{#if item.syncStatus === 'pending' || item.syncStatus === 'error'}
-											<button
-												class="btn-icon"
-												onclick={() => syncItem(item)}
-												aria-label="Sync Item"
-											>
-												<i
-													class="material-icons"
-													style={item.syncStatus === 'error'
-														? 'color: var(--md-sys-color-error)'
-														: ''}>sync</i
-												>
-											</button>
-										{/if}
-										<button class="btn-icon" onclick={() => handleEdit(item)} aria-label="Edit Item"
-											><i class="material-icons">edit</i></button
-										>
-										<button
-											class="btn-icon btn-icon-danger"
-											onclick={() => promptForDelete(item)}
-											aria-label="Delete Item"><i class="material-icons">delete</i></button
-										>
-									</div>
+							<button
+								class="item-card"
+								onclick={() => openDetail(item)}
+								in:fly={{ y: 20, duration: 250, delay: Math.min(200, 30) }}
+							>
+								<div class="item-card-thumb">
+									{#if item.photos && item.photos.length > 0}
+										<img src={photoSrc(item.photos, item.photoUrls, 0)} alt="" />
+									{:else}
+										<i class="material-icons">inventory_2</i>
+									{/if}
 								</div>
-
+								<div class="item-card-heading">
+									<h3>{item.name}</h3>
+									<p class="item-card-meta">
+										<span class="item-card-sku">{item.sku || 'No SKU'}</span>
+									</p>
+								</div>
 								{#if item.syncStatus && item.syncStatus !== 'synced'}
-									<div class="item-card-status">
-										<span class="status-chip {item.syncStatus}">{item.syncStatus}</span>
-									</div>
+									<span
+										class="item-card-status-dot {item.syncStatus}"
+										title="Sync status: {item.syncStatus}"
+									></span>
 								{/if}
-
-								{#if item.photos && item.photos.length > 0}
-									<div class="photo-gallery photo-gallery-compact">
-										{#each item.photos as photo, i}
-											<div class="thumbnail">
-												<img
-													src={photoSrc(item.photos, item.photoUrls, i)}
-													alt="{item.name} preview {i + 1}"
-												/>
-												<button
-													class="btn-icon"
-													style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.5);"
-													onclick={() =>
-														downloadPhoto(photoSrc(item.photos, item.photoUrls, i), item.sku, i)}
-												>
-													<i class="material-icons" style="color:white; font-size:16px;">download</i
-													>
-												</button>
-											</div>
-										{/each}
-									</div>
-								{/if}
-							</div>
+								<i class="material-icons item-card-chevron" aria-hidden="true">chevron_right</i>
+							</button>
 						{/each}
 					</div>
 				{/each}
 			</div>
 		{/if}
 	</main>
+
+	{#if viewingItem}
+		<div
+			bind:this={detailBackdrop}
+			class="detail-page"
+			role="dialog"
+			aria-label="{viewingItem.name} details"
+			tabindex="-1"
+			onkeydown={(e) => {
+				if (e.key === 'Escape') closeDetail();
+			}}
+			transition:fly={{ x: 32, duration: 200 }}
+		>
+			<div class="detail-header">
+				<button class="btn-icon" onclick={closeDetail} aria-label="Back to list">
+					<i class="material-icons">arrow_back</i>
+				</button>
+				<h2>{viewingItem.name}</h2>
+				<button class="btn-icon" onclick={() => viewingItem && editFromDetail(viewingItem)} aria-label="Edit Item">
+					<i class="material-icons">edit</i>
+				</button>
+				<button
+					class="btn-icon btn-icon-danger"
+					onclick={() => viewingItem && deleteFromDetail(viewingItem)}
+					aria-label="Delete Item"
+				>
+					<i class="material-icons">delete</i>
+				</button>
+			</div>
+
+			<div class="detail-body">
+				{#if viewingItem.photos && viewingItem.photos.length > 0}
+					<div class="detail-section">
+						<div class="photo-gallery">
+							{#each viewingItem.photos as photo, i}
+								<div class="thumbnail">
+									<img
+										src={photoSrc(viewingItem.photos, viewingItem.photoUrls, i)}
+										alt="{viewingItem.name} preview {i + 1}"
+									/>
+									<button
+										class="btn-icon"
+										style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.5);"
+										onclick={() =>
+											viewingItem &&
+											downloadPhoto(
+												photoSrc(viewingItem.photos, viewingItem.photoUrls, i),
+												viewingItem.sku,
+												i
+											)}
+									>
+										<i class="material-icons" style="color:white; font-size:16px;">download</i>
+									</button>
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				<div class="detail-section">
+					<p class="detail-label">SKU</p>
+					<p class="detail-value mono">{viewingItem.sku || 'No SKU'}</p>
+				</div>
+
+				<div class="detail-section">
+					<p class="detail-label">Category</p>
+					<p class="detail-value">{viewingItem.category || 'Uncategorized'}</p>
+				</div>
+
+				{#if viewingItem.barcode}
+					<div class="detail-section">
+						<p class="detail-label">Barcode</p>
+						<p class="detail-value mono">{viewingItem.barcode}</p>
+					</div>
+				{/if}
+
+				<div class="detail-section">
+					<p class="detail-label">Description</p>
+					{#if viewingItem.description}
+						<p class="detail-value detail-value-description">{viewingItem.description}</p>
+					{:else}
+						<p class="detail-value detail-empty">No description</p>
+					{/if}
+				</div>
+
+				<div class="detail-section">
+					<p class="detail-label">Status</p>
+					<span class="status-chip {viewingItem.is_active ? 'active' : 'inactive'}"
+						>{viewingItem.is_active ? 'Active' : 'Inactive'}</span
+					>
+				</div>
+
+				<div class="detail-section">
+					<p class="detail-label">Sync</p>
+					<div class="detail-sync-row">
+						<span class="status-chip {viewingItem.syncStatus ?? 'pending'}"
+							>{viewingItem.syncStatus ?? 'pending'}</span
+						>
+						{#if viewingItem.syncStatus === 'pending' || viewingItem.syncStatus === 'error'}
+							<button class="btn btn-text" onclick={() => viewingItem && syncItem(viewingItem)}>
+								Sync now
+							</button>
+						{/if}
+					</div>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<button class="fab {items.length === 0 ? 'fab-pulse' : ''}" onclick={handleNew} aria-label="Add New Item">
 		<i class="material-icons">add</i>
