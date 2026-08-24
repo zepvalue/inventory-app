@@ -39,12 +39,73 @@
 		'Donate'
 	];
 
+	// A distinct, muted hex per category (not tied to MD3 tokens) so items are
+	// scannable by category at a glance in the list. Deliberately avoids the
+	// saturated greens/ambers/reds already used by sync-status chips, so a
+	// category dot is never mistaken for a status indicator.
+	const categoryColors: Record<string, string> = {
+		Kitchen: '#C97B4A',
+		Rig: '#5B7B92',
+		Toys: '#B0558C',
+		Shade: '#4E8B6E',
+		Tensegrities: '#7C6FAE',
+		'Wizard Hut': '#8C5E9C',
+		Power: '#A97C3F',
+		Lighting: '#D3A94E',
+		'Water/Shower': '#4C8DA6',
+		Store: '#6B7280',
+		Trash: '#8D6E63',
+		Replace: '#9C7A54',
+		Donate: '#5C8A72'
+	};
+	function categoryColor(category: string): string {
+		return categoryColors[category] ?? 'var(--md-sys-color-outline)';
+	}
+
 	// --- STATE ---
 	let items = $state<Item[]>([]);
 	let formMode = $state<'create' | 'edit'>('create');
 	let selectedItem = $state<Item | null>(null);
 	let formData = $state<Item | null>(null);
 	let showMenu = $state(false);
+
+	// Groups the flat item list into category sections, sorted alphabetically
+	// within each group. Without this, items render in whatever order the
+	// local DB returns them (most-recently-changed first), which reads as
+	// arbitrary once there are more than a handful — grouping gives the list
+	// real structure to scan by, the way a physical inventory would be
+	// organized on shelves. Category order follows the app's own `categories`
+	// list (same order as the add/edit form) rather than alphabetical, since
+	// that's the order the person already thinks in; anything outside that
+	// list (or blank) falls into "Uncategorized" at the end.
+	interface CategoryGroup {
+		category: string;
+		color: string;
+		items: Item[];
+	}
+	function groupItemsByCategory(list: Item[]): CategoryGroup[] {
+		const byCategory = new Map<string, Item[]>();
+		for (const item of list) {
+			const key = item.category?.trim() || 'Uncategorized';
+			const bucket = byCategory.get(key);
+			if (bucket) bucket.push(item);
+			else byCategory.set(key, [item]);
+		}
+		const orderIndex = new Map(categories.map((c, i) => [c, i]));
+		const keys = [...byCategory.keys()].sort((a, b) => {
+			if (a === 'Uncategorized') return 1;
+			if (b === 'Uncategorized') return -1;
+			const ai = orderIndex.get(a) ?? categories.length;
+			const bi = orderIndex.get(b) ?? categories.length;
+			return ai !== bi ? ai - bi : a.localeCompare(b);
+		});
+		return keys.map((key) => ({
+			category: key,
+			color: categoryColor(key),
+			items: byCategory.get(key)!.sort((a, b) => a.name.localeCompare(b.name))
+		}));
+	}
+	let groupedItems = $derived(groupItemsByCategory(items));
 
 	// Reload the on-screen list from the local (offline-first) database.
 	async function refresh() {
@@ -733,8 +794,35 @@
 			font-family: 'Roboto Mono', monospace;
 			font-size: 0.6875rem;
 		}
-		.item-card-dot {
-			opacity: 0.5;
+		.category-section {
+			margin-bottom: 18px;
+		}
+		.category-section:last-child {
+			margin-bottom: 0;
+		}
+		.category-header {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 4px 2px 8px;
+		}
+		.category-dot {
+			width: 9px;
+			height: 9px;
+			border-radius: 50%;
+			flex-shrink: 0;
+		}
+		.category-header h2 {
+			margin: 0;
+			font-size: 0.8125rem;
+			font-weight: 600;
+			letter-spacing: 0.02em;
+			color: var(--md-sys-color-on-surface-variant);
+		}
+		.category-count {
+			font-size: 0.75rem;
+			color: var(--md-sys-color-outline);
+			font-variant-numeric: tabular-nums;
 		}
 		.item-card-status {
 			margin-top: 6px;
@@ -774,7 +862,7 @@
 			border-radius: 16px;
 			font-size: 0.75rem;
 			font-weight: 500;
-			text-transform: uppercase;
+			text-transform: capitalize;
 		}
 		.status-chip.active {
 			background-color: #c8e6c9;
@@ -928,7 +1016,7 @@
 			border-radius: 20px;
 			border: none;
 			font-weight: 500;
-			text-transform: uppercase;
+			font-size: 0.875rem;
 			cursor: pointer;
 		}
 		.btn-text {
@@ -1175,66 +1263,77 @@
 			</div>
 		{:else}
 			<div class="items-list">
-				{#each items as item (item.id)}
-					<div class="item-card" in:fly={{ y: 20, duration: 250, delay: Math.min(200, 30) }}>
-						<div class="item-card-header">
-							<div class="item-card-heading">
-								<h3>{item.name}</h3>
-								<p class="item-card-meta">
-									<span class="item-card-sku">{item.sku || 'No SKU'}</span>
-									{#if item.category}
-										<span class="item-card-dot" aria-hidden="true">&middot;</span>
-										<span>{item.category}</span>
-									{/if}
-								</p>
-							</div>
-							<div class="item-card-actions">
-								{#if item.syncStatus === 'pending' || item.syncStatus === 'error'}
-									<button class="btn-icon" onclick={() => syncItem(item)} aria-label="Sync Item">
-										<i
-											class="material-icons"
-											style={item.syncStatus === 'error' ? 'color: var(--md-sys-color-error)' : ''}
-											>sync</i
-										>
-									</button>
-								{/if}
-								<button class="btn-icon" onclick={() => handleEdit(item)} aria-label="Edit Item"
-									><i class="material-icons">edit</i></button
-								>
-								<button
-									class="btn-icon btn-icon-danger"
-									onclick={() => promptForDelete(item)}
-									aria-label="Delete Item"><i class="material-icons">delete</i></button
-								>
-							</div>
+				{#each groupedItems as group (group.category)}
+					<div class="category-section">
+						<div class="category-header">
+							<span class="category-dot" style="background-color: {group.color}"></span>
+							<h2>{group.category}</h2>
+							<span class="category-count">{group.items.length}</span>
 						</div>
-
-						{#if item.syncStatus && item.syncStatus !== 'synced'}
-							<div class="item-card-status">
-								<span class="status-chip {item.syncStatus}">{item.syncStatus}</span>
-							</div>
-						{/if}
-
-						{#if item.photos && item.photos.length > 0}
-							<div class="photo-gallery photo-gallery-compact">
-								{#each item.photos as photo, i}
-									<div class="thumbnail">
-										<img
-											src={photoSrc(item.photos, item.photoUrls, i)}
-											alt="{item.name} preview {i + 1}"
-										/>
-										<button
-											class="btn-icon"
-											style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.5);"
-											onclick={() =>
-												downloadPhoto(photoSrc(item.photos, item.photoUrls, i), item.sku, i)}
-										>
-											<i class="material-icons" style="color:white; font-size:16px;">download</i>
-										</button>
+						{#each group.items as item (item.id)}
+							<div class="item-card" in:fly={{ y: 20, duration: 250, delay: Math.min(200, 30) }}>
+								<div class="item-card-header">
+									<div class="item-card-heading">
+										<h3>{item.name}</h3>
+										<p class="item-card-meta">
+											<span class="item-card-sku">{item.sku || 'No SKU'}</span>
+										</p>
 									</div>
-								{/each}
+									<div class="item-card-actions">
+										{#if item.syncStatus === 'pending' || item.syncStatus === 'error'}
+											<button
+												class="btn-icon"
+												onclick={() => syncItem(item)}
+												aria-label="Sync Item"
+											>
+												<i
+													class="material-icons"
+													style={item.syncStatus === 'error'
+														? 'color: var(--md-sys-color-error)'
+														: ''}>sync</i
+												>
+											</button>
+										{/if}
+										<button class="btn-icon" onclick={() => handleEdit(item)} aria-label="Edit Item"
+											><i class="material-icons">edit</i></button
+										>
+										<button
+											class="btn-icon btn-icon-danger"
+											onclick={() => promptForDelete(item)}
+											aria-label="Delete Item"><i class="material-icons">delete</i></button
+										>
+									</div>
+								</div>
+
+								{#if item.syncStatus && item.syncStatus !== 'synced'}
+									<div class="item-card-status">
+										<span class="status-chip {item.syncStatus}">{item.syncStatus}</span>
+									</div>
+								{/if}
+
+								{#if item.photos && item.photos.length > 0}
+									<div class="photo-gallery photo-gallery-compact">
+										{#each item.photos as photo, i}
+											<div class="thumbnail">
+												<img
+													src={photoSrc(item.photos, item.photoUrls, i)}
+													alt="{item.name} preview {i + 1}"
+												/>
+												<button
+													class="btn-icon"
+													style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.5);"
+													onclick={() =>
+														downloadPhoto(photoSrc(item.photos, item.photoUrls, i), item.sku, i)}
+												>
+													<i class="material-icons" style="color:white; font-size:16px;">download</i
+													>
+												</button>
+											</div>
+										{/each}
+									</div>
+								{/if}
 							</div>
-						{/if}
+						{/each}
 					</div>
 				{/each}
 			</div>
