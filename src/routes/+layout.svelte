@@ -13,8 +13,25 @@
 </svelte:head>
 
 <MdTheme>
-<!-- The <slot /> tag is where your page content (like +page.svelte) will be rendered. -->
-<slot />
+<div class="app-shell">
+    <!-- The <slot /> tag is where your page content (like +page.svelte) will be rendered. -->
+    <slot />
+    <footer class="app-footer">Powered by ZepValue</footer>
+</div>
 </MdTheme>
 
+<style>
+    .app-shell {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
 
+    .app-footer {
+        flex-shrink: 0;
+        text-align: center;
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+        font-size: 12px;
+        color: var(--md-sys-color-on-surface-variant);
+    }
+</style>
