@@ -335,21 +335,45 @@
 		lightboxIndex = (lightboxIndex - 1 + viewingItem.photos.length) % viewingItem.photos.length;
 	}
 
-	// Left/right swipe to move between photos. Deliberately simple (compares
-	// start/end X on release) rather than a live-following drag like the
-	// sheet's close gesture — a photo viewer swipe is a discrete "go to the
-	// next photo" action, not something that needs to visually track the
-	// finger the whole way.
+	// Swipe left/right to move between photos, or swipe down to close --
+	// mirrors the detail sheet's drag-to-close, applied to the image wrapper
+	// (a plain div with no Svelte transition: directive of its own, so its
+	// reactive transform can't collide with one the way the sheet's did).
+	// Horizontal swipe stays a discrete "go to next/prev" action (compares
+	// start/end X only); vertical drag live-follows the finger like the sheet.
+	const LIGHTBOX_CLOSE_THRESHOLD_PX = 100;
 	let lightboxSwipeStartX = 0;
+	let lightboxSwipeStartY = 0;
+	let lightboxDragging = $state(false);
+	let lightboxDragY = $state(0);
+
 	function onLightboxPointerDown(e: PointerEvent) {
 		lightboxSwipeStartX = e.clientX;
+		lightboxSwipeStartY = e.clientY;
+		lightboxDragging = true;
+		lightboxDragY = 0;
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 	}
+	function onLightboxPointerMove(e: PointerEvent) {
+		if (!lightboxDragging) return;
+		// Only follow downward drags visually — this is a close gesture, not
+		// a way to pan the image around.
+		lightboxDragY = Math.max(0, e.clientY - lightboxSwipeStartY);
+	}
 	function onLightboxPointerUp(e: PointerEvent) {
-		const delta = e.clientX - lightboxSwipeStartX;
-		if (Math.abs(delta) < 50) return;
-		if (delta < 0) nextPhoto();
-		else prevPhoto();
+		if (!lightboxDragging) return;
+		lightboxDragging = false;
+		const deltaX = e.clientX - lightboxSwipeStartX;
+		const deltaY = e.clientY - lightboxSwipeStartY;
+		if (Math.abs(deltaY) > Math.abs(deltaX) && deltaY > LIGHTBOX_CLOSE_THRESHOLD_PX) {
+			closeLightbox();
+			return;
+		}
+		lightboxDragY = 0;
+		if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+			if (deltaX < 0) nextPhoto();
+			else prevPhoto();
+		}
 	}
 
 	// --- LIFECYCLE & SKU GENERATION ---
@@ -2279,8 +2303,13 @@
 
 			<div
 				class="lightbox-image-wrap"
+				style="transform: translateY({lightboxDragY}px); opacity: {Math.max(
+					0.3,
+					1 - lightboxDragY / 400
+				)}; transition: {lightboxDragging ? 'none' : 'transform 200ms ease, opacity 200ms ease'};"
 				onclick={(e) => e.stopPropagation()}
 				onpointerdown={onLightboxPointerDown}
+				onpointermove={onLightboxPointerMove}
 				onpointerup={onLightboxPointerUp}
 			>
 				<img
