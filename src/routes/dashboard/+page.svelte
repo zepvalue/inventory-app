@@ -1131,9 +1131,21 @@
 			max-height: 88dvh;
 			background-color: var(--md-sys-color-surface);
 			border-radius: 20px 20px 0 0;
+			overflow: hidden;
+		}
+		/* Deliberately a separate element from .detail-sheet. .detail-sheet
+		   carries the mount/unmount transition:fly (which briefly manipulates
+		   its own transform during that animation); .detail-sheet-inner carries
+		   the live drag-follow transform instead. Putting both on the same
+		   element caused them to fight over the same CSS property -- Svelte's
+		   transition directive and a manually-bound reactive style="transform"
+		   binding don't compose safely together, and the drag gesture silently
+		   stopped moving the sheet as a result. */
+		.detail-sheet-inner {
 			display: flex;
 			flex-direction: column;
-			overflow: hidden;
+			height: 100%;
+			min-height: 0;
 		}
 		.detail-sheet-handle {
 			display: flex;
@@ -2072,9 +2084,6 @@
 				role="dialog"
 				aria-label="{viewingItem.name} details"
 				tabindex="-1"
-				style="transform: translateY({sheetDragY}px); transition: {sheetDragging
-					? 'none'
-					: 'transform 200ms ease'};"
 				onkeydown={(e) => {
 					if (e.key === 'Escape') closeDetail();
 				}}
@@ -2082,38 +2091,44 @@
 				transition:fly={{ y: 400, duration: 220 }}
 			>
 				<div
-					class="detail-sheet-handle"
-					onpointerdown={onSheetDragStart}
-					onpointermove={onSheetDragMove}
-					onpointerup={onSheetDragEnd}
-					onpointercancel={onSheetDragEnd}
-				></div>
-				<div
-					class="detail-header"
-					onpointerdown={onSheetDragStart}
-					onpointermove={onSheetDragMove}
-					onpointerup={onSheetDragEnd}
-					onpointercancel={onSheetDragEnd}
+					class="detail-sheet-inner"
+					style="transform: translateY({sheetDragY}px); transition: {sheetDragging
+						? 'none'
+						: 'transform 200ms ease'};"
 				>
-					<button class="btn-icon" onclick={closeDetail} aria-label="Back to list">
-						<i class="material-icons">arrow_back</i>
-					</button>
-					<h2>{viewingItem.name}</h2>
-					<button
-						class="btn-icon"
-						onclick={() => viewingItem && editFromDetail(viewingItem)}
-						aria-label="Edit Item"
+					<div
+						class="detail-sheet-handle"
+						onpointerdown={onSheetDragStart}
+						onpointermove={onSheetDragMove}
+						onpointerup={onSheetDragEnd}
+						onpointercancel={onSheetDragEnd}
+					></div>
+					<div
+						class="detail-header"
+						onpointerdown={onSheetDragStart}
+						onpointermove={onSheetDragMove}
+						onpointerup={onSheetDragEnd}
+						onpointercancel={onSheetDragEnd}
 					>
-						<i class="material-icons">edit</i>
-					</button>
-					<button
-						class="btn-icon btn-icon-danger"
-						onclick={() => viewingItem && deleteFromDetail(viewingItem)}
-						aria-label="Delete Item"
-					>
-						<i class="material-icons">delete</i>
-					</button>
-				</div>
+						<button class="btn-icon" onclick={closeDetail} aria-label="Back to list">
+							<i class="material-icons">arrow_back</i>
+						</button>
+						<h2>{viewingItem.name}</h2>
+						<button
+							class="btn-icon"
+							onclick={() => viewingItem && editFromDetail(viewingItem)}
+							aria-label="Edit Item"
+						>
+							<i class="material-icons">edit</i>
+						</button>
+						<button
+							class="btn-icon btn-icon-danger"
+							onclick={() => viewingItem && deleteFromDetail(viewingItem)}
+							aria-label="Delete Item"
+						>
+							<i class="material-icons">delete</i>
+						</button>
+					</div>
 
 			<div class="detail-body">
 				{#if viewingItem.photos && viewingItem.photos.length > 0}
@@ -2216,6 +2231,7 @@
 						</div>
 					</div>
 				{/if}
+			</div>
 			</div>
 		</div>
 	</div>
