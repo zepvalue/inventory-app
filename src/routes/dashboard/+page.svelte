@@ -70,7 +70,16 @@
 	let formData = $state<Item | null>(null);
 	let showMenu = $state(false);
 	let showFilterMenu = $state(false);
+	let showSortMenu = $state(false);
 	let activeCategoryFilters = $state<string[]>([]);
+	type SortOption = 'name-asc' | 'name-desc' | 'date-newest' | 'date-oldest';
+	let sortOption = $state<SortOption>('name-asc');
+	const sortOptions: { value: SortOption; label: string }[] = [
+		{ value: 'name-asc', label: 'Name (A–Z)' },
+		{ value: 'name-desc', label: 'Name (Z–A)' },
+		{ value: 'date-newest', label: 'Date added (newest)' },
+		{ value: 'date-oldest', label: 'Date added (oldest)' }
+	];
 
 	// Groups the flat item list into category buckets purely to drive the
 	// filter chip bar (name, color, count per category) — items render as a
@@ -111,18 +120,31 @@
 
 	// The flat list actually rendered: every item if no filters are active,
 	// otherwise items matching ANY selected category (multi-select, not
-	// AND'd) — always sorted alphabetically by name so the order stays
-	// predictable either way.
-	let filteredItems = $derived(
-		(activeCategoryFilters.length === 0
-			? items
-			: items.filter((i) =>
-					activeCategoryFilters.includes(i.category?.trim() || 'Uncategorized')
-				)
-		)
-			.slice()
-			.sort((a, b) => a.name.localeCompare(b.name))
-	);
+	// AND'd), ordered by whichever sort option is active. "Date added" uses
+	// the local auto-increment `id` rather than `lastModified`, since id is
+	// assigned once at creation and never changes, while lastModified also
+	// updates on edits — id is the accurate "when was this added" signal.
+	let filteredItems = $derived(sortItems(applyCategoryFilter(items)));
+
+	function applyCategoryFilter(list: Item[]): Item[] {
+		return activeCategoryFilters.length === 0
+			? list
+			: list.filter((i) => activeCategoryFilters.includes(i.category?.trim() || 'Uncategorized'));
+	}
+	function sortItems(list: Item[]): Item[] {
+		const sorted = list.slice();
+		switch (sortOption) {
+			case 'name-desc':
+				return sorted.sort((a, b) => b.name.localeCompare(a.name));
+			case 'date-newest':
+				return sorted.sort((a, b) => (b.id ?? 0) - (a.id ?? 0));
+			case 'date-oldest':
+				return sorted.sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+			case 'name-asc':
+			default:
+				return sorted.sort((a, b) => a.name.localeCompare(b.name));
+		}
+	}
 
 	function toggleCategoryFilter(category: string) {
 		activeCategoryFilters = activeCategoryFilters.includes(category)
@@ -131,6 +153,10 @@
 	}
 	function clearCategoryFilters() {
 		activeCategoryFilters = [];
+	}
+	function selectSortOption(option: SortOption) {
+		sortOption = option;
+		showSortMenu = false;
 	}
 
 	// Reload the on-screen list from the local (offline-first) database.
@@ -914,6 +940,8 @@
 			font-size: 20px;
 		}
 		.filter-row {
+			display: flex;
+			gap: 8px;
 			margin-bottom: 12px;
 		}
 		.filter-trigger {
@@ -957,6 +985,9 @@
 			max-height: 340px;
 			overflow-y: auto;
 		}
+		.sort-menu {
+			min-width: 190px;
+		}
 		.filter-menu-item {
 			width: 100%;
 			border: none;
@@ -987,6 +1018,17 @@
 		.filter-menu-check .material-icons {
 			font-size: 14px;
 			color: #fff;
+		}
+		.filter-menu-radio {
+			flex-shrink: 0;
+			width: 16px;
+			height: 16px;
+			border-radius: 50%;
+			border: 1.5px solid var(--md-sys-color-outline);
+		}
+		.filter-menu-radio.checked {
+			border-color: var(--md-sys-color-primary);
+			border-width: 5px;
 		}
 		.filter-menu-label {
 			flex-grow: 1;
@@ -1608,6 +1650,28 @@
 							{/each}
 						</div>
 						<div class="fixed inset-0 z-10" onclick={() => (showFilterMenu = false)}></div>
+					{/if}
+				</div>
+
+				<div class="dropdown">
+					<button class="filter-trigger" onclick={() => (showSortMenu = !showSortMenu)}>
+						<i class="material-icons">swap_vert</i>
+						<span>Sort</span>
+					</button>
+					{#if showSortMenu}
+						<div class="dropdown-menu sort-menu" transition:fly={{ y: -8, duration: 150 }}>
+							{#each sortOptions as option (option.value)}
+								<button
+									class="dropdown-item filter-menu-item"
+									onclick={() => selectSortOption(option.value)}
+								>
+									<span class="filter-menu-radio {sortOption === option.value ? 'checked' : ''}"
+									></span>
+									<span class="filter-menu-label">{option.label}</span>
+								</button>
+							{/each}
+						</div>
+						<div class="fixed inset-0 z-10" onclick={() => (showSortMenu = false)}></div>
 					{/if}
 				</div>
 			</div>
