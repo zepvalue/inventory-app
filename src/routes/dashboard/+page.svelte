@@ -1472,6 +1472,39 @@
 			max-height: 90dvh;
 			overflow-y: auto;
 		}
+		/* The edit/create form specifically: title stays pinned at the top and
+		   Cancel/Save stays pinned at the bottom, with only the fields between
+		   them scrolling -- so the save action never requires scrolling down to
+		   reach, however long the form gets (more photos, a long description).
+		   Camera/scanner/delete-confirm keep the simpler default .modal-content
+		   behavior above (they're short and don't need a pinned footer). */
+		.modal-content--form {
+			display: flex;
+			flex-direction: column;
+			padding: 20px 0 0;
+			overflow: hidden;
+		}
+		.modal-content--form .modal-title-row {
+			flex-shrink: 0;
+			padding: 0 20px;
+		}
+		.modal-form {
+			display: flex;
+			flex-direction: column;
+			flex-grow: 1;
+			min-height: 0;
+		}
+		.modal-scroll-body {
+			flex-grow: 1;
+			overflow-y: auto;
+			padding: 0 20px;
+		}
+		.modal-content--form .modal-actions {
+			flex-shrink: 0;
+			margin-top: 0;
+			padding: 14px 20px calc(16px + env(safe-area-inset-bottom));
+			border-top: 1px solid var(--md-sys-color-outline-variant);
+		}
 		.modal-title-row {
 			display: flex;
 			align-items: center;
@@ -2250,7 +2283,7 @@
 			}}
 			transition:fade={{ duration: 150 }}
 		>
-			<div class="modal-content">
+			<div class="modal-content {!showCamera && !showScanner ? 'modal-content--form' : ''}">
 				{#if showCamera}
 					<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>Take Photo</h2>
 					<!-- svelte-ignore a11y-media-has-caption -->
@@ -2282,91 +2315,94 @@
 							<i class="material-icons">close</i>
 						</button>
 					</div>
-					<form onsubmit={handleSubmit}>
-						<p class="detail-section-title">Details</p>
-						<div class="form-row">
-							<div class="form-field">
-								<label for="category">Category</label>
-								<select id="category" bind:value={formData.category} required>
-									{#each categories as category}
-										<option value={category}>{category}</option>
-									{/each}
-								</select>
+					<form onsubmit={handleSubmit} class="modal-form">
+						<div class="modal-scroll-body">
+							<p class="detail-section-title">Details</p>
+							<div class="form-row">
+								<div class="form-field">
+									<label for="category">Category</label>
+									<select id="category" bind:value={formData.category} required>
+										{#each categories as category}
+											<option value={category}>{category}</option>
+										{/each}
+									</select>
+								</div>
+								<div class="form-field">
+									<label for="sku">SKU</label>
+									<input type="text" id="sku" bind:value={formData.sku} required readonly />
+								</div>
 							</div>
 							<div class="form-field">
-								<label for="sku">SKU</label>
-								<input type="text" id="sku" bind:value={formData.sku} required readonly />
+								<label for="name">Name</label>
+								<input type="text" id="name" bind:value={formData.name} required />
 							</div>
-						</div>
-						<div class="form-field">
-							<label for="name">Name</label>
-							<input type="text" id="name" bind:value={formData.name} required />
-						</div>
-						<div class="form-field">
-							<label for="description">Description</label>
-							<textarea id="description" rows="3" bind:value={formData.description}></textarea>
-						</div>
-						<div class="form-field">
-							<label for="barcode">Barcode</label>
-							<div class="input-container">
-								<input type="text" id="barcode" bind:value={formData.barcode} />
-								<button
-									type="button"
-									onclick={startBarcodeScanner}
-									class="btn-icon"
-									aria-label="Scan Barcode"><i class="material-icons">qr_code_scanner</i></button
-								>
+							<div class="form-field">
+								<label for="description">Description</label>
+								<textarea id="description" rows="3" bind:value={formData.description}></textarea>
 							</div>
-						</div>
+							<div class="form-field">
+								<label for="barcode">Barcode</label>
+								<div class="input-container">
+									<input type="text" id="barcode" bind:value={formData.barcode} />
+									<button
+										type="button"
+										onclick={startBarcodeScanner}
+										class="btn-icon"
+										aria-label="Scan Barcode"
+										><i class="material-icons">qr_code_scanner</i></button
+									>
+								</div>
+							</div>
 
-						<p class="detail-section-title">Photos</p>
-						<div class="form-field">
-							<div class="photo-gallery">
-								{#each formData.photos as photo, index}
-									<div class="thumbnail">
-										<img
-											src={photoSrc(formData.photos, formData.photoUrls, index)}
-											alt={`Preview ${index + 1}`}
-										/>
-										<button type="button" class="remove-btn" onclick={() => removePhoto(index)}
-											>&times;</button
-										>
-									</div>
-								{/each}
+							<p class="detail-section-title">Photos</p>
+							<div class="form-field">
+								<div class="photo-gallery">
+									{#each formData.photos as photo, index}
+										<div class="thumbnail">
+											<img
+												src={photoSrc(formData.photos, formData.photoUrls, index)}
+												alt={`Preview ${index + 1}`}
+											/>
+											<button type="button" class="remove-btn" onclick={() => removePhoto(index)}
+												>&times;</button
+											>
+										</div>
+									{/each}
+								</div>
+								<div class="photo-actions" style="display: flex; gap: 8px; margin-top: 8px;">
+									<button type="button" onclick={startCamera} class="btn btn-text">
+										<i class="material-icons" style="vertical-align: middle; margin-right: 4px;"
+											>photo_camera</i
+										>Take Photo
+									</button>
+									<input
+										type="file"
+										id="photo-upload"
+										accept="image/*"
+										onchange={handleFileSelect}
+										style="display: none;"
+										multiple
+									/>
+									<label
+										for="photo-upload"
+										class="btn btn-text"
+										style="cursor: pointer; display: inline-flex; align-items: center;"
+									>
+										<i class="material-icons" style="vertical-align: middle; margin-right: 4px;"
+											>photo_library</i
+										>From Gallery
+									</label>
+								</div>
 							</div>
-							<div class="photo-actions" style="display: flex; gap: 8px; margin-top: 8px;">
-								<button type="button" onclick={startCamera} class="btn btn-text">
-									<i class="material-icons" style="vertical-align: middle; margin-right: 4px;"
-										>photo_camera</i
-									>Take Photo
-								</button>
-								<input
-									type="file"
-									id="photo-upload"
-									accept="image/*"
-									onchange={handleFileSelect}
-									style="display: none;"
-									multiple
-								/>
-								<label
-									for="photo-upload"
-									class="btn btn-text"
-									style="cursor: pointer; display: inline-flex; align-items: center;"
-								>
-									<i class="material-icons" style="vertical-align: middle; margin-right: 4px;"
-										>photo_library</i
-									>From Gallery
+
+							<p class="detail-section-title">Status</p>
+							<div class="switch-field">
+								<label for="is_active" class="switch-label">Item is Active</label>
+								<label class="switch">
+									<input type="checkbox" id="is_active" bind:checked={formData.is_active} />
+									<span class="switch-track"></span>
 								</label>
 							</div>
-						</div>
-
-						<p class="detail-section-title">Status</p>
-						<div class="switch-field">
-							<label for="is_active" class="switch-label">Item is Active</label>
-							<label class="switch">
-								<input type="checkbox" id="is_active" bind:checked={formData.is_active} />
-								<span class="switch-track"></span>
-							</label>
 						</div>
 
 						<div class="modal-actions">
