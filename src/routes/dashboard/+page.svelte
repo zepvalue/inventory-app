@@ -251,7 +251,11 @@
 	// covers the full viewport.
 	$effect(() => {
 		if (!browser) return;
-		const overlayOpen = viewingItem !== null || selectedItem !== null || itemToDelete !== null;
+		const overlayOpen =
+			viewingItem !== null ||
+			selectedItem !== null ||
+			itemToDelete !== null ||
+			lightboxIndex !== null;
 		document.body.style.overflow = overlayOpen ? 'hidden' : '';
 		return () => {
 			document.body.style.overflow = '';
@@ -307,6 +311,45 @@
 	function deleteFromDetail(item: Item) {
 		closeDetail();
 		promptForDelete(item);
+	}
+
+	// Full-screen photo viewer, opened by tapping the hero image or any
+	// thumbnail in the detail page's Photos section. `null` = closed;
+	// otherwise the index into viewingItem.photos currently shown.
+	let lightboxIndex = $state<number | null>(null);
+	let lightboxBackdrop = $state<HTMLElement | null>(null);
+
+	function openLightbox(index: number) {
+		lightboxIndex = index;
+		tick().then(() => lightboxBackdrop?.focus());
+	}
+	function closeLightbox() {
+		lightboxIndex = null;
+	}
+	function nextPhoto() {
+		if (!viewingItem || lightboxIndex === null) return;
+		lightboxIndex = (lightboxIndex + 1) % viewingItem.photos.length;
+	}
+	function prevPhoto() {
+		if (!viewingItem || lightboxIndex === null) return;
+		lightboxIndex = (lightboxIndex - 1 + viewingItem.photos.length) % viewingItem.photos.length;
+	}
+
+	// Left/right swipe to move between photos. Deliberately simple (compares
+	// start/end X on release) rather than a live-following drag like the
+	// sheet's close gesture — a photo viewer swipe is a discrete "go to the
+	// next photo" action, not something that needs to visually track the
+	// finger the whole way.
+	let lightboxSwipeStartX = 0;
+	function onLightboxPointerDown(e: PointerEvent) {
+		lightboxSwipeStartX = e.clientX;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+	function onLightboxPointerUp(e: PointerEvent) {
+		const delta = e.clientX - lightboxSwipeStartX;
+		if (Math.abs(delta) < 50) return;
+		if (delta < 0) nextPhoto();
+		else prevPhoto();
 	}
 
 	// --- LIFECYCLE & SKU GENERATION ---
@@ -1134,15 +1177,96 @@
 			padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
 		}
 		.detail-hero {
+			display: block;
+			width: 100%;
 			height: 150px;
 			border-radius: 14px;
 			overflow: hidden;
 			margin-bottom: 14px;
+			padding: 0;
+			border: none;
+			background: none;
+			cursor: pointer;
 		}
 		.detail-hero-image {
 			width: 100%;
 			height: 100%;
 			object-fit: cover;
+		}
+		.thumbnail {
+			cursor: pointer;
+		}
+		.lightbox {
+			position: fixed;
+			inset: 0;
+			z-index: 60;
+			background-color: rgba(0, 0, 0, 0.92);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.lightbox-topbar {
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+			z-index: 1;
+		}
+		.lightbox-count {
+			color: rgba(255, 255, 255, 0.85);
+			font-size: 0.8125rem;
+			font-variant-numeric: tabular-nums;
+		}
+		.lightbox-actions {
+			display: flex;
+			gap: 4px;
+		}
+		.lightbox-btn {
+			color: #fff;
+		}
+		.lightbox-btn:hover {
+			background-color: rgba(255, 255, 255, 0.15);
+		}
+		.lightbox-image-wrap {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 100%;
+			height: 100%;
+			touch-action: pan-y;
+		}
+		.lightbox-image {
+			max-width: 100%;
+			max-height: 100%;
+			object-fit: contain;
+		}
+		.lightbox-nav {
+			position: absolute;
+			top: 50%;
+			transform: translateY(-50%);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 40px;
+			height: 40px;
+			border-radius: 50%;
+			border: none;
+			background-color: rgba(255, 255, 255, 0.15);
+			color: #fff;
+			cursor: pointer;
+		}
+		.lightbox-nav:hover {
+			background-color: rgba(255, 255, 255, 0.25);
+		}
+		.lightbox-nav-prev {
+			left: 12px;
+		}
+		.lightbox-nav-next {
+			right: 12px;
 		}
 		.detail-section-title {
 			margin: 4px 0 8px;
@@ -1812,13 +1936,13 @@
 
 			<div class="detail-body">
 				{#if viewingItem.photos && viewingItem.photos.length > 0}
-					<div class="detail-hero">
+					<button class="detail-hero" onclick={() => openLightbox(0)} aria-label="View photo">
 						<img
 							class="detail-hero-image"
 							src={photoSrc(viewingItem.photos, viewingItem.photoUrls, 0)}
 							alt={viewingItem.name}
 						/>
-					</div>
+					</button>
 				{/if}
 
 				<p class="detail-section-title">Details</p>
@@ -1877,7 +2001,15 @@
 						<p class="detail-section-title">Photos</p>
 						<div class="photo-gallery">
 							{#each viewingItem.photos as photo, i}
-								<div class="thumbnail">
+								<div
+									class="thumbnail"
+									role="button"
+									tabindex="0"
+									onclick={() => openLightbox(i)}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') openLightbox(i);
+									}}
+								>
 									<img
 										src={photoSrc(viewingItem.photos, viewingItem.photoUrls, i)}
 										alt="{viewingItem.name} preview {i + 1}"
@@ -1885,13 +2017,16 @@
 									<button
 										class="btn-icon"
 										style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.5);"
-										onclick={() =>
-											viewingItem &&
-											downloadPhoto(
-												photoSrc(viewingItem.photos, viewingItem.photoUrls, i),
-												viewingItem.sku,
-												i
-											)}
+										onclick={(e) => {
+											e.stopPropagation();
+											if (viewingItem) {
+												downloadPhoto(
+													photoSrc(viewingItem.photos, viewingItem.photoUrls, i),
+													viewingItem.sku,
+													i
+												);
+											}
+										}}
 									>
 										<i class="material-icons" style="color:white; font-size:16px;">download</i>
 									</button>
@@ -1903,6 +2038,84 @@
 			</div>
 		</div>
 	</div>
+	{/if}
+
+	{#if lightboxIndex !== null && viewingItem}
+		<div
+			bind:this={lightboxBackdrop}
+			class="lightbox"
+			role="dialog"
+			aria-label="Photo viewer"
+			tabindex="-1"
+			onclick={closeLightbox}
+			onkeydown={(e) => {
+				if (e.key === 'Escape') closeLightbox();
+				else if (e.key === 'ArrowRight') nextPhoto();
+				else if (e.key === 'ArrowLeft') prevPhoto();
+			}}
+			transition:fade={{ duration: 150 }}
+		>
+			<div class="lightbox-topbar">
+				<span class="lightbox-count">{lightboxIndex + 1} / {viewingItem.photos.length}</span>
+				<div class="lightbox-actions">
+					<button
+						class="btn-icon lightbox-btn"
+						aria-label="Download photo"
+						onclick={(e) => {
+							e.stopPropagation();
+							if (viewingItem && lightboxIndex !== null) {
+								downloadPhoto(
+									photoSrc(viewingItem.photos, viewingItem.photoUrls, lightboxIndex),
+									viewingItem.sku,
+									lightboxIndex
+								);
+							}
+						}}
+					>
+						<i class="material-icons">download</i>
+					</button>
+					<button class="btn-icon lightbox-btn" onclick={closeLightbox} aria-label="Close">
+						<i class="material-icons">close</i>
+					</button>
+				</div>
+			</div>
+
+			<div
+				class="lightbox-image-wrap"
+				onclick={(e) => e.stopPropagation()}
+				onpointerdown={onLightboxPointerDown}
+				onpointerup={onLightboxPointerUp}
+			>
+				<img
+					class="lightbox-image"
+					src={photoSrc(viewingItem.photos, viewingItem.photoUrls, lightboxIndex)}
+					alt="{viewingItem.name} preview {lightboxIndex + 1}"
+				/>
+			</div>
+
+			{#if viewingItem.photos.length > 1}
+				<button
+					class="lightbox-nav lightbox-nav-prev"
+					onclick={(e) => {
+						e.stopPropagation();
+						prevPhoto();
+					}}
+					aria-label="Previous photo"
+				>
+					<i class="material-icons">chevron_left</i>
+				</button>
+				<button
+					class="lightbox-nav lightbox-nav-next"
+					onclick={(e) => {
+						e.stopPropagation();
+						nextPhoto();
+					}}
+					aria-label="Next photo"
+				>
+					<i class="material-icons">chevron_right</i>
+				</button>
+			{/if}
+		</div>
 	{/if}
 
 	<button class="fab {items.length === 0 ? 'fab-pulse' : ''}" onclick={handleNew} aria-label="Add New Item">
