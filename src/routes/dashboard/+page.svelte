@@ -1612,7 +1612,7 @@
 						onclick={() => (showFilterMenu = !showFilterMenu)}
 					>
 						<i class="material-icons">filter_list</i>
-						<span>Filter</span>
+						<span>Categories</span>
 						{#if activeCategoryFilters.length > 0}
 							<span class="filter-trigger-count">{activeCategoryFilters.length}</span>
 						{/if}
