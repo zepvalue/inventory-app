@@ -1625,7 +1625,7 @@
 										<i class="material-icons">check</i>
 									{/if}
 								</span>
-								<span class="filter-menu-label">All categories</span>
+								<span class="filter-menu-label">All</span>
 								<span class="filter-menu-count">{items.length}</span>
 							</button>
 							<div class="filter-menu-divider"></div>
