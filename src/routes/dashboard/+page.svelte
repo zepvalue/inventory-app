@@ -1079,6 +1079,9 @@
 			overflow: hidden;
 			margin-bottom: 14px;
 		}
+		.detail-hero.no-photo {
+			height: 100px;
+		}
 		.detail-hero-image {
 			width: 100%;
 			height: 100%;
@@ -1094,6 +1097,9 @@
 		.detail-hero-placeholder .material-icons {
 			font-size: 64px;
 			opacity: 0.6;
+		}
+		.detail-hero.no-photo .detail-hero-placeholder .material-icons {
+			font-size: 32px;
 		}
 		.detail-hero-badge {
 			position: absolute;
@@ -1124,7 +1130,7 @@
 			align-items: center;
 			flex-wrap: wrap;
 			gap: 8px;
-			margin-bottom: 20px;
+			margin-bottom: 16px;
 		}
 		.detail-sync-btn {
 			padding: 4px 12px;
@@ -1133,13 +1139,13 @@
 			background-color: var(--md-sys-color-surface-variant);
 			border-radius: 16px;
 			padding: 0 16px;
-			margin-bottom: 20px;
+			margin-bottom: 16px;
 		}
 		.detail-info-row {
 			display: flex;
 			align-items: flex-start;
 			gap: 12px;
-			padding: 14px 0;
+			padding: 12px 0;
 		}
 		.detail-info-row + .detail-info-row {
 			border-top: 1px solid var(--md-sys-color-outline-variant);
@@ -1755,7 +1761,7 @@
 
 			<div class="detail-body">
 				<div
-					class="detail-hero"
+					class="detail-hero {!viewingItem.photos?.length ? 'no-photo' : ''}"
 					style={!viewingItem.photos?.length
 						? `background-color: ${categoryColor(viewingItem.category || 'Uncategorized')}22;`
 						: ''}
