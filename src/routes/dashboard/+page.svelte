@@ -904,38 +904,144 @@
 			display: flex;
 			flex-direction: column;
 		}
-		.detail-header {
+		.detail-hero {
+			position: relative;
+			flex-shrink: 0;
+			height: 220px;
+			background-color: var(--md-sys-color-surface-variant);
+			border-radius: 0 0 24px 24px;
+			overflow: hidden;
+		}
+		.detail-hero-image {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		.detail-hero-placeholder {
+			width: 100%;
+			height: 100%;
 			display: flex;
 			align-items: center;
-			gap: 4px;
-			padding: 10px 8px;
-			border-bottom: 1px solid var(--md-sys-color-outline-variant);
-			flex-shrink: 0;
+			justify-content: center;
 		}
-		.detail-header h2 {
-			flex-grow: 1;
-			min-width: 0;
-			margin: 0;
-			font-size: 1.0625rem;
+		.detail-hero-placeholder .material-icons {
+			font-size: 72px;
+			opacity: 0.6;
+		}
+		.detail-hero-topbar {
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 10px;
+		}
+		.detail-hero-actions {
+			display: flex;
+			gap: 6px;
+		}
+		.detail-hero-btn {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 38px;
+			height: 38px;
+			border-radius: 50%;
+			border: none;
+			background-color: rgba(255, 255, 255, 0.85);
+			color: #1c1b1f;
+			cursor: pointer;
+			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+			transition: background-color 150ms ease;
+		}
+		.detail-hero-btn:hover {
+			background-color: #fff;
+		}
+		.detail-hero-btn:active {
+			transform: scale(0.94);
+		}
+		.detail-hero-btn-danger:hover {
+			color: var(--md-sys-color-error);
+		}
+		.detail-hero-badge {
+			position: absolute;
+			left: 12px;
+			bottom: 12px;
+			padding: 4px 12px;
+			border-radius: 14px;
+			font-size: 0.75rem;
 			font-weight: 600;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-			padding: 0 4px;
+			color: #fff;
+			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 		}
 		.detail-body {
 			flex-grow: 1;
 			overflow-y: auto;
-			padding: 16px;
+			padding: 18px 16px 32px;
 		}
-		.detail-section {
-			margin-bottom: 20px;
+		.detail-title-block {
+			margin-bottom: 12px;
 		}
-		.detail-section:last-child {
+		.detail-title-block h2 {
+			margin: 0;
+			font-size: 1.375rem;
+			font-weight: 600;
+			color: var(--md-sys-color-on-surface);
+			overflow-wrap: break-word;
+		}
+		.detail-sku {
+			margin: 2px 0 0;
+			font-family: 'Roboto Mono', monospace;
+			font-size: 0.8125rem;
+			color: var(--md-sys-color-on-surface-variant);
+		}
+		.detail-chip-row {
+			display: flex;
+			align-items: center;
+			flex-wrap: wrap;
+			gap: 8px;
+			margin-bottom: 18px;
+		}
+		.detail-sync-btn {
+			padding: 4px 12px;
+		}
+		.detail-card {
+			background-color: var(--md-sys-color-surface-variant);
+			border-radius: 16px;
+			padding: 14px 16px;
+			margin-bottom: 12px;
+		}
+		.detail-card:last-child {
 			margin-bottom: 0;
 		}
+		.detail-card-header {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			margin-bottom: 8px;
+			color: var(--md-sys-color-on-surface-variant);
+		}
+		.detail-card-header .material-icons {
+			font-size: 18px;
+		}
+		.detail-card-header span {
+			font-size: 0.8125rem;
+			font-weight: 600;
+		}
+		.detail-info-row {
+			display: flex;
+			align-items: flex-start;
+			gap: 12px;
+		}
+		.detail-info-row .material-icons {
+			font-size: 20px;
+			color: var(--md-sys-color-on-surface-variant);
+			margin-top: 1px;
+		}
 		.detail-label {
-			margin: 0 0 4px;
+			margin: 0 0 2px;
 			font-size: 0.75rem;
 			font-weight: 600;
 			color: var(--md-sys-color-on-surface-variant);
@@ -949,16 +1055,15 @@
 			font-family: 'Roboto Mono', monospace;
 		}
 		.detail-value-description {
+			margin: 0;
+			font-size: 0.9375rem;
+			line-height: 1.5;
+			color: var(--md-sys-color-on-surface);
 			white-space: pre-wrap;
 		}
 		.detail-value.detail-empty {
 			color: var(--md-sys-color-on-surface-variant);
 			font-style: italic;
-		}
-		.detail-sync-row {
-			display: flex;
-			align-items: center;
-			gap: 4px;
 		}
 		.item-photo-preview,
 		.form-photo-preview {
@@ -1439,26 +1544,108 @@
 			}}
 			transition:fly={{ x: 32, duration: 200 }}
 		>
-			<div class="detail-header">
-				<button class="btn-icon" onclick={closeDetail} aria-label="Back to list">
-					<i class="material-icons">arrow_back</i>
-				</button>
-				<h2>{viewingItem.name}</h2>
-				<button class="btn-icon" onclick={() => viewingItem && editFromDetail(viewingItem)} aria-label="Edit Item">
-					<i class="material-icons">edit</i>
-				</button>
-				<button
-					class="btn-icon btn-icon-danger"
-					onclick={() => viewingItem && deleteFromDetail(viewingItem)}
-					aria-label="Delete Item"
+			<div
+				class="detail-hero"
+				style={!viewingItem.photos?.length
+					? `background-color: ${categoryColor(viewingItem.category || 'Uncategorized')}22;`
+					: ''}
+			>
+				{#if viewingItem.photos && viewingItem.photos.length > 0}
+					<img
+						class="detail-hero-image"
+						src={photoSrc(viewingItem.photos, viewingItem.photoUrls, 0)}
+						alt={viewingItem.name}
+					/>
+				{:else}
+					<div
+						class="detail-hero-placeholder"
+						style="color: {categoryColor(viewingItem.category || 'Uncategorized')};"
+					>
+						<i class="material-icons">inventory_2</i>
+					</div>
+				{/if}
+				<div class="detail-hero-topbar">
+					<button class="detail-hero-btn" onclick={closeDetail} aria-label="Back to list">
+						<i class="material-icons">arrow_back</i>
+					</button>
+					<div class="detail-hero-actions">
+						<button
+							class="detail-hero-btn"
+							onclick={() => viewingItem && editFromDetail(viewingItem)}
+							aria-label="Edit Item"
+						>
+							<i class="material-icons">edit</i>
+						</button>
+						<button
+							class="detail-hero-btn detail-hero-btn-danger"
+							onclick={() => viewingItem && deleteFromDetail(viewingItem)}
+							aria-label="Delete Item"
+						>
+							<i class="material-icons">delete</i>
+						</button>
+					</div>
+				</div>
+				<span
+					class="detail-hero-badge"
+					style="background-color: {categoryColor(viewingItem.category || 'Uncategorized')};"
 				>
-					<i class="material-icons">delete</i>
-				</button>
+					{viewingItem.category || 'Uncategorized'}
+				</span>
 			</div>
 
 			<div class="detail-body">
+				<div class="detail-title-block">
+					<h2>{viewingItem.name}</h2>
+					<p class="detail-sku">{viewingItem.sku || 'No SKU'}</p>
+				</div>
+
+				<div class="detail-chip-row">
+					<span class="status-chip {viewingItem.is_active ? 'active' : 'inactive'}"
+						>{viewingItem.is_active ? 'Active' : 'Inactive'}</span
+					>
+					<span class="status-chip {viewingItem.syncStatus ?? 'pending'}"
+						>{viewingItem.syncStatus ?? 'pending'}</span
+					>
+					{#if viewingItem.syncStatus === 'pending' || viewingItem.syncStatus === 'error'}
+						<button
+							class="btn btn-text detail-sync-btn"
+							onclick={() => viewingItem && syncItem(viewingItem)}
+						>
+							Sync now
+						</button>
+					{/if}
+				</div>
+
+				<div class="detail-card">
+					<div class="detail-card-header">
+						<i class="material-icons">notes</i>
+						<span>Description</span>
+					</div>
+					{#if viewingItem.description}
+						<p class="detail-value-description">{viewingItem.description}</p>
+					{:else}
+						<p class="detail-value detail-empty">No description</p>
+					{/if}
+				</div>
+
+				{#if viewingItem.barcode}
+					<div class="detail-card">
+						<div class="detail-info-row">
+							<i class="material-icons">qr_code_2</i>
+							<div>
+								<p class="detail-label">Barcode</p>
+								<p class="detail-value mono">{viewingItem.barcode}</p>
+							</div>
+						</div>
+					</div>
+				{/if}
+
 				{#if viewingItem.photos && viewingItem.photos.length > 0}
-					<div class="detail-section">
+					<div class="detail-card">
+						<div class="detail-card-header">
+							<i class="material-icons">photo_library</i>
+							<span>Photos</span>
+						</div>
 						<div class="photo-gallery">
 							{#each viewingItem.photos as photo, i}
 								<div class="thumbnail">
@@ -1484,53 +1671,6 @@
 						</div>
 					</div>
 				{/if}
-
-				<div class="detail-section">
-					<p class="detail-label">SKU</p>
-					<p class="detail-value mono">{viewingItem.sku || 'No SKU'}</p>
-				</div>
-
-				<div class="detail-section">
-					<p class="detail-label">Category</p>
-					<p class="detail-value">{viewingItem.category || 'Uncategorized'}</p>
-				</div>
-
-				{#if viewingItem.barcode}
-					<div class="detail-section">
-						<p class="detail-label">Barcode</p>
-						<p class="detail-value mono">{viewingItem.barcode}</p>
-					</div>
-				{/if}
-
-				<div class="detail-section">
-					<p class="detail-label">Description</p>
-					{#if viewingItem.description}
-						<p class="detail-value detail-value-description">{viewingItem.description}</p>
-					{:else}
-						<p class="detail-value detail-empty">No description</p>
-					{/if}
-				</div>
-
-				<div class="detail-section">
-					<p class="detail-label">Status</p>
-					<span class="status-chip {viewingItem.is_active ? 'active' : 'inactive'}"
-						>{viewingItem.is_active ? 'Active' : 'Inactive'}</span
-					>
-				</div>
-
-				<div class="detail-section">
-					<p class="detail-label">Sync</p>
-					<div class="detail-sync-row">
-						<span class="status-chip {viewingItem.syncStatus ?? 'pending'}"
-							>{viewingItem.syncStatus ?? 'pending'}</span
-						>
-						{#if viewingItem.syncStatus === 'pending' || viewingItem.syncStatus === 'error'}
-							<button class="btn btn-text" onclick={() => viewingItem && syncItem(viewingItem)}>
-								Sync now
-							</button>
-						{/if}
-					</div>
-				</div>
 			</div>
 		</div>
 	{/if}
