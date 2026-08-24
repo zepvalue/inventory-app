@@ -1161,7 +1161,7 @@
 			margin-top: 1px;
 		}
 		.detail-section-title {
-			margin: 0 0 8px;
+			margin: 4px 0 8px;
 			font-size: 0.75rem;
 			font-weight: 600;
 			color: var(--md-sys-color-on-surface-variant);
@@ -1798,6 +1798,7 @@
 					</div>
 				</div>
 
+				<p class="detail-section-title">Status</p>
 				<div class="detail-chip-row">
 					<span class="status-chip {viewingItem.is_active ? 'active' : 'inactive'}"
 						>{viewingItem.is_active ? 'Active' : 'Inactive'}</span
@@ -1816,6 +1817,7 @@
 				</div>
 
 				{#if viewingItem.description || viewingItem.barcode}
+					<p class="detail-section-title">Details</p>
 					<div class="detail-info">
 						{#if viewingItem.description}
 							<div class="detail-info-row">
