@@ -73,6 +73,17 @@ export const create = mutation({
 	}
 });
 
+// Lets the frontend show "which tag would a new item get right now" using the
+// server's clock rather than the device's — a wrong/unset local clock (or a
+// spoofed one) can't produce a misleading indicator, since this always
+// reflects what create() would actually stamp. Thin wrapper over
+// sourceForCreationTime(), which already has direct unit test coverage in
+// convex/source.test.ts.
+export const currentSource = query({
+	args: {},
+	handler: async () => sourceForCreationTime()
+});
+
 export const update = mutation({
 	args: { id: v.id('items'), ...itemFields },
 	handler: async (ctx, { id, ...fields }) => {

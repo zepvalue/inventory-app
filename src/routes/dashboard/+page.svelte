@@ -10,7 +10,7 @@
 		buildPhotoUrlIndex,
 		serialisePhotoManifest
 	} from '$lib/services/photo-manifest';
-	import { listItems } from '$lib/convex';
+	import { listItems, getCurrentSource } from '$lib/convex';
 	import {
 		sync,
 		queueSync,
@@ -61,14 +61,32 @@
 
 	// SCAT/SCAB indicator — reflects which source tag a *new* item created
 	// right now would get (see convex/source.ts for the cutover instant).
-	// Re-checked every minute so it flips live if the app is left open
-	// across the cutover, rather than only updating on next reload.
+	// Sourced from the Convex server's clock (items:currentSource), not the
+	// device's, so a wrong or unset local clock/timezone can't show a
+	// misleading tag. Falls back to a local estimate — clearly labeled — only
+	// when offline, since there's no server to ask; refreshed on load, on
+	// reconnect, and every minute so it flips live near the cutover.
 	let currentSource = $state(sourceForCreationTime());
-	onMount(() => {
-		const interval = setInterval(() => {
+	let currentSourceIsServerConfirmed = $state(false);
+	async function refreshCurrentSource() {
+		try {
+			currentSource = await getCurrentSource();
+			currentSourceIsServerConfirmed = true;
+		} catch {
+			// Offline or unreachable — fall back to the device clock. Still
+			// correct for a device with a sane clock; just not server-verified.
 			currentSource = sourceForCreationTime();
-		}, 60_000);
-		return () => clearInterval(interval);
+			currentSourceIsServerConfirmed = false;
+		}
+	}
+	onMount(() => {
+		refreshCurrentSource();
+		const interval = setInterval(refreshCurrentSource, 60_000);
+		window.addEventListener('online', refreshCurrentSource);
+		return () => {
+			clearInterval(interval);
+			window.removeEventListener('online', refreshCurrentSource);
+		};
 	});
 
 	// Alert on sync failures even when they happen in the background (e.g. the
@@ -755,6 +773,10 @@
 			background-color: var(--md-sys-color-tertiary-container);
 			color: var(--md-sys-color-on-tertiary-container);
 		}
+		.source-chip-offline-mark {
+			margin-left: 2px;
+			font-weight: 700;
+		}
 		@keyframes pulse {
 			0% {
 				opacity: 1;
@@ -986,9 +1008,13 @@
 		<div style="display:flex; align-items:center; gap:8px;">
 			<span
 				class="status-chip source-chip {currentSource === 'SCAB' ? 'scab' : 'scat'}"
-				title="New items are currently tagged source: {currentSource}"
+				title={currentSourceIsServerConfirmed
+					? `New items are currently tagged source: ${currentSource} (server-confirmed)`
+					: `New items are currently tagged source: ${currentSource} (device estimate — offline)`}
 			>
-				{currentSource}
+				{currentSource}{#if !currentSourceIsServerConfirmed}<span class="source-chip-offline-mark"
+						>*</span
+					>{/if}
 			</span>
 			<h1>Inventory</h1>
 			<span

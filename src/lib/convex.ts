@@ -47,6 +47,7 @@ const createRef = makeFunctionReference<'mutation'>('items:create');
 const updateRef = makeFunctionReference<'mutation'>('items:update');
 const removeRef = makeFunctionReference<'mutation'>('items:remove');
 const generateUploadUrlRef = makeFunctionReference<'mutation'>('items:generateUploadUrl');
+const currentSourceRef = makeFunctionReference<'query'>('items:currentSource');
 
 let client: ConvexClient | null = null;
 
@@ -130,4 +131,13 @@ export async function updateItem(id: string, payload: ItemPayload): Promise<Serv
 
 export async function removeItem(id: string): Promise<void> {
 	await getClient().mutation(removeRef, { id });
+}
+
+/**
+ * The source tag (SCAT/SCAB) a new item created right now would receive,
+ * per the *server's* clock — see convex/items.ts:currentSource. Used to
+ * drive the home page indicator without trusting the device's own clock.
+ */
+export async function getCurrentSource(): Promise<string> {
+	return (await getClient().query(currentSourceRef, {})) as string;
 }
