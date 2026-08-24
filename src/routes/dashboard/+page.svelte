@@ -1084,7 +1084,7 @@
 		}
 		.detail-section-title {
 			margin: 4px 0 8px;
-			font-size: 0.75rem;
+			font-size: 0.8125rem;
 			font-weight: 600;
 			color: var(--md-sys-color-on-surface-variant);
 		}
@@ -1117,13 +1117,13 @@
 		}
 		.detail-label {
 			margin: 0 0 3px;
-			font-size: 0.75rem;
+			font-size: 0.8125rem;
 			font-weight: 600;
 			color: var(--md-sys-color-on-surface-variant);
 		}
 		.detail-value {
 			margin: 0;
-			font-size: 0.9375rem;
+			font-size: 1rem;
 			color: var(--md-sys-color-on-surface);
 		}
 		.detail-value.mono {
@@ -1146,8 +1146,8 @@
 		}
 		.detail-value-description {
 			margin: 0;
-			font-size: 0.9375rem;
-			line-height: 1.5;
+			font-size: 1rem;
+			line-height: 1.55;
 			color: var(--md-sys-color-on-surface);
 			white-space: pre-wrap;
 		}

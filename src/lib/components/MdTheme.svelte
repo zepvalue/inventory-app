@@ -146,6 +146,18 @@
     }
 
     /* ── Global resets & base ── */
+    html {
+      /* Fluid root size: text scales with the actual screen width instead of
+         staying a fixed pixel size regardless of device. Expressed as
+         rem + vw (not pure vw) so it still responds to the browser/OS text-size
+         preference (accessibility "larger text" settings scale the rem part)
+         while also growing on wider screens and shrinking gracefully on
+         narrow ones. Clamped 16px–19px: never smaller than a typical default,
+         never large enough to break layouts on bigger phones/tablets.
+         Every text size in the app is expressed in rem, so this one change
+         scales list text, buttons, and the detail page together. */
+      font-size: clamp(1rem, 0.85rem + 1.2vw, 1.1875rem);
+    }
     *, *::before, *::after {
       box-sizing: border-box;
     }
