@@ -1893,7 +1893,12 @@
 			display: flex;
 			align-items: center;
 			gap: 8px;
+			width: 100%;
 			padding: 8px 16px;
+			border: none;
+			background: none;
+			font: inherit;
+			text-align: left;
 			cursor: pointer;
 			color: var(--md-sys-color-on-surface);
 			transition: background-color 120ms ease;
@@ -2438,19 +2443,20 @@
 									? ''
 									: `background-color: ${categoryColor(formData.category || 'Uncategorized')}22;`}
 							>
-								{#if formData.photos.length > 0}
-									<img
-										class="detail-hero-image"
-										src={photoSrc(formData.photos, formData.photoUrls, 0)}
-										alt={formData.name || 'Item preview'}
-									/>
-								{:else}
-									<div class="dropdown form-hero-dropdown">
-										<button
-											type="button"
-											class="form-hero-trigger"
-											onclick={() => (showPhotoSourceMenu = !showPhotoSourceMenu)}
-										>
+								<div class="dropdown form-hero-dropdown">
+									<button
+										type="button"
+										class="form-hero-trigger"
+										onclick={() => (showPhotoSourceMenu = !showPhotoSourceMenu)}
+										aria-label={formData.photos.length ? 'Change photo' : 'Add a photo'}
+									>
+										{#if formData.photos.length > 0}
+											<img
+												class="detail-hero-image"
+												src={photoSrc(formData.photos, formData.photoUrls, 0)}
+												alt={formData.name || 'Item preview'}
+											/>
+										{:else}
 											<div
 												class="detail-hero-placeholder form-hero-placeholder"
 												style="color: {categoryColor(formData.category || 'Uncategorized')};"
@@ -2458,36 +2464,36 @@
 												<i class="material-icons">add_a_photo</i>
 												<span>No photo yet — tap to add</span>
 											</div>
-										</button>
-										{#if showPhotoSourceMenu}
-											<div
-												class="dropdown-menu form-hero-menu"
-												transition:fly={{ y: -8, duration: 150 }}
-											>
-												<button
-													type="button"
-													class="dropdown-item"
-													onclick={() => {
-														showPhotoSourceMenu = false;
-														startCamera();
-													}}
-												>
-													<i class="material-icons">photo_camera</i>
-													<span>Take Photo</span>
-												</button>
-												<label for="photo-upload" class="dropdown-item">
-													<i class="material-icons">photo_library</i>
-													<span>Choose from Gallery</span>
-												</label>
-											</div>
-											<div
-												class="fixed inset-0 z-10"
-												role="presentation"
-												onclick={() => (showPhotoSourceMenu = false)}
-											></div>
 										{/if}
-									</div>
-								{/if}
+									</button>
+									{#if showPhotoSourceMenu}
+										<div
+											class="dropdown-menu form-hero-menu"
+											transition:fly={{ y: -8, duration: 150 }}
+										>
+											<button
+												type="button"
+												class="dropdown-item"
+												onclick={() => {
+													showPhotoSourceMenu = false;
+													startCamera();
+												}}
+											>
+												<i class="material-icons">photo_camera</i>
+												<span>Take Photo</span>
+											</button>
+											<label for="photo-upload" class="dropdown-item">
+												<i class="material-icons">photo_library</i>
+												<span>Choose from Gallery</span>
+											</label>
+										</div>
+										<div
+											class="fixed inset-0 z-10"
+											role="presentation"
+											onclick={() => (showPhotoSourceMenu = false)}
+										></div>
+									{/if}
+								</div>
 							</div>
 
 							<p class="detail-section-title">Details</p>
@@ -2535,9 +2541,9 @@
 								</div>
 							</div>
 
-							<p class="detail-section-title">Photos</p>
-							<div class="form-field">
-								{#if formData.photos.length > 0}
+							{#if formData.photos.length > 0}
+								<p class="detail-section-title">Photos</p>
+								<div class="form-field">
 									<div class="photo-gallery photo-gallery-compact">
 										{#each formData.photos as photo, index}
 											<div class="thumbnail">
@@ -2551,32 +2557,16 @@
 											</div>
 										{/each}
 									</div>
-								{/if}
-								<div class="photo-actions" style="display: flex; gap: 8px; margin-top: 8px;">
-									<button type="button" onclick={startCamera} class="btn btn-text">
-										<i class="material-icons" style="vertical-align: middle; margin-right: 4px;"
-											>photo_camera</i
-										>Take Photo
-									</button>
-									<input
-										type="file"
-										id="photo-upload"
-										accept="image/*"
-										onchange={handleFileSelect}
-										style="display: none;"
-										multiple
-									/>
-									<label
-										for="photo-upload"
-										class="btn btn-text"
-										style="cursor: pointer; display: inline-flex; align-items: center;"
-									>
-										<i class="material-icons" style="vertical-align: middle; margin-right: 4px;"
-											>photo_library</i
-										>From Gallery
-									</label>
 								</div>
-							</div>
+							{/if}
+							<input
+								type="file"
+								id="photo-upload"
+								accept="image/*"
+								onchange={handleFileSelect}
+								style="display: none;"
+								multiple
+							/>
 
 							<p class="detail-section-title">Status</p>
 							<div class="switch-field">
