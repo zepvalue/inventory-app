@@ -206,18 +206,15 @@
 		};
 	});
 
-	// Alert on sync failures even when they happen in the background (e.g. the
-	// debounced sync after a save, or a reconnect sync) — lastSyncError otherwise
-	// only surfaces as a tooltip on the status chip, easy to miss. Gated on the
-	// message changing so a repeated/unresolved error doesn't re-alert every
-	// retry.
-	let lastAlertedSyncError = $state<string | null>(null);
-	$effect(() => {
-		if ($lastSyncError && $lastSyncError !== lastAlertedSyncError) {
-			lastAlertedSyncError = $lastSyncError;
-			alert(`Sync finished with errors: ${$lastSyncError}`);
-		}
-	});
+	// Sync failures (including a server-unreachable timeout) deliberately do
+	// NOT interrupt the user with an alert — losing connectivity is a normal,
+	// expected state for an offline-first app, not an emergency. The ambient
+	// status chip in the top bar ('Offline' / 'X pending' / ...), the dot on
+	// each affected item card, and the sync chip + 'Sync now' action on that
+	// item's detail page all reflect the same lastSyncError already, without
+	// blocking anything the person is doing. A background sync that fails
+	// (on load, on reconnect, or the debounce after saving) should be
+	// invisible until/unless they go looking for it.
 
 	// ... other state variables
 	let modalBackdrop = $state<HTMLElement | null>(null);
@@ -1974,15 +1971,19 @@
 					? 'error'
 					: $syncing
 						? 'pending'
-						: $pendingCount > 0
-							? 'local'
-							: 'synced'}"
+						: $lastSyncError
+							? 'error'
+							: $pendingCount > 0
+								? 'local'
+								: 'synced'}"
 				title={$lastSyncError ?? ''}
 			>
 				{#if !$online}
 					Offline
 				{:else if $syncing}
 					Syncing…
+				{:else if $lastSyncError}
+					Sync error
 				{:else if $pendingCount > 0}
 					{$pendingCount} pending
 				{:else}
