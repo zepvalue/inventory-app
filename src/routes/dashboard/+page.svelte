@@ -20,6 +20,7 @@
 		pendingCount,
 		lastSyncError
 	} from '$lib/services/sync';
+	import { sourceForCreationTime } from '$lib/services/source';
 
 	// --- CONSTANTS ---
 	const categories = [
@@ -56,6 +57,18 @@
 	onMount(() => {
 		refresh();
 		return initSync(refresh);
+	});
+
+	// SCAT/SCAB indicator — reflects which source tag a *new* item created
+	// right now would get (see convex/source.ts for the cutover instant).
+	// Re-checked every minute so it flips live if the app is left open
+	// across the cutover, rather than only updating on next reload.
+	let currentSource = $state(sourceForCreationTime());
+	onMount(() => {
+		const interval = setInterval(() => {
+			currentSource = sourceForCreationTime();
+		}, 60_000);
+		return () => clearInterval(interval);
 	});
 
 	// Alert on sync failures even when they happen in the background (e.g. the
@@ -730,6 +743,18 @@
 			background-color: #ffcdd2;
 			color: #b71c1c;
 		}
+		.status-chip.source-chip {
+			font-family: 'Roboto Mono', monospace;
+			flex-shrink: 0;
+		}
+		.status-chip.scat {
+			background-color: var(--md-sys-color-secondary-container);
+			color: var(--md-sys-color-on-secondary-container);
+		}
+		.status-chip.scab {
+			background-color: var(--md-sys-color-tertiary-container);
+			color: var(--md-sys-color-on-tertiary-container);
+		}
 		@keyframes pulse {
 			0% {
 				opacity: 1;
@@ -959,6 +984,12 @@
 <div class="app-container">
 	<header class="top-bar">
 		<div style="display:flex; align-items:center; gap:8px;">
+			<span
+				class="status-chip source-chip {currentSource === 'SCAB' ? 'scab' : 'scat'}"
+				title="New items are currently tagged source: {currentSource}"
+			>
+				{currentSource}
+			</span>
 			<h1>Inventory</h1>
 			<span
 				class="status-chip {!$online
