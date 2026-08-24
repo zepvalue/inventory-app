@@ -1472,54 +1472,161 @@
 			max-height: 90dvh;
 			overflow-y: auto;
 		}
-		.modal-header {
-			font-size: 1.375rem;
+		.modal-title-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 8px;
 			margin-bottom: 16px;
 		}
-		.form-field {
+		.modal-title-row .modal-header {
+			margin-bottom: 0;
+		}
+		.modal-header {
+			font-size: 1.375rem;
+			font-weight: 600;
 			margin-bottom: 16px;
+		}
+		.form-row {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 12px;
+			margin-bottom: 18px;
+		}
+		.form-row .form-field {
+			margin-bottom: 0;
+		}
+		.form-field {
+			margin-bottom: 18px;
 		}
 		.form-field label,
 		.form-field-label {
 			display: block;
-			font-size: 0.75rem;
-			color: var(--md-sys-color-primary);
-			margin-bottom: 4px;
-			padding-left: 16px;
+			font-size: 0.8125rem;
+			font-weight: 600;
+			color: var(--md-sys-color-on-surface-variant);
+			margin-bottom: 6px;
 		}
 		.input-container {
 			position: relative;
 			display: flex;
 			align-items: center;
-			gap: 8px;
+			gap: 4px;
+			background-color: var(--md-sys-color-surface-variant);
+			border: 1.5px solid transparent;
+			border-radius: 12px;
+			padding-right: 4px;
+			transition: border-color 150ms ease;
+		}
+		.input-container:focus-within {
+			border-color: var(--md-sys-color-primary);
+		}
+		.input-container input {
+			background: none !important;
+			border: none !important;
 		}
 		.form-field input[type='text'],
 		.form-field textarea,
 		.form-field select {
 			background-color: var(--md-sys-color-surface-variant);
-			border: none;
-			border-radius: 4px;
-			padding: 14px 16px;
+			border: 1.5px solid transparent;
+			border-radius: 12px;
+			padding: 12px 14px;
+			font-family: inherit;
 			font-size: 1rem;
-			color: var(--md-sys-color-on-surface-variant);
+			color: var(--md-sys-color-on-surface);
 			width: 100%;
 			box-sizing: border-box;
+			transition:
+				border-color 150ms ease,
+				background-color 150ms ease;
+		}
+		.form-field input[type='text']:focus,
+		.form-field textarea:focus,
+		.form-field select:focus {
+			outline: none;
+			border-color: var(--md-sys-color-primary);
+			background-color: var(--md-sys-color-surface);
+		}
+		.form-field input[readonly] {
+			font-family: 'Roboto Mono', monospace;
+			color: var(--md-sys-color-on-surface-variant);
+			background-color: var(--md-sys-color-surface);
+			border-style: dashed;
+			border-color: var(--md-sys-color-outline-variant);
+		}
+		.form-field select {
+			appearance: none;
+			-webkit-appearance: none;
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23625b71' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+			background-repeat: no-repeat;
+			background-position: right 12px center;
+			background-size: 20px;
+			padding-right: 38px;
 		}
 		.form-field textarea {
-			font-family: 'Roboto', sans-serif;
 			resize: vertical;
 		}
-		.checkbox-field {
+		.switch-field {
 			display: flex;
 			align-items: center;
-			gap: 8px;
-			padding: 12px 0;
+			justify-content: space-between;
+			gap: 12px;
+			padding: 8px 2px 18px;
+		}
+		.switch-label {
+			font-size: 0.9375rem;
+			color: var(--md-sys-color-on-surface);
+		}
+		.switch {
+			position: relative;
+			display: inline-block;
+			flex-shrink: 0;
+			width: 44px;
+			height: 26px;
+			cursor: pointer;
+		}
+		.switch input {
+			position: absolute;
+			inset: 0;
+			opacity: 0;
+			margin: 0;
+			cursor: pointer;
+		}
+		.switch-track {
+			position: absolute;
+			inset: 0;
+			border-radius: 13px;
+			background-color: var(--md-sys-color-outline-variant);
+			transition: background-color 150ms ease;
+		}
+		.switch-track::before {
+			content: '';
+			position: absolute;
+			top: 3px;
+			left: 3px;
+			width: 20px;
+			height: 20px;
+			border-radius: 50%;
+			background-color: #fff;
+			box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+			transition: transform 150ms ease;
+		}
+		.switch input:checked + .switch-track {
+			background-color: var(--md-sys-color-primary);
+		}
+		.switch input:checked + .switch-track::before {
+			transform: translateX(18px);
+		}
+		.switch input:focus-visible + .switch-track {
+			outline: 2px solid var(--md-sys-color-primary);
+			outline-offset: 2px;
 		}
 		.modal-actions {
 			display: flex;
 			justify-content: flex-end;
 			gap: 8px;
-			margin-top: 24px;
+			margin-top: 8px;
 		}
 		.btn {
 			padding: 10px 20px;
@@ -2167,21 +2274,29 @@
 						>
 					</div>
 				{:else}
-					<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>
-						{formMode === 'create' ? 'Add New Item' : 'Edit Item'}
-					</h2>
+					<div class="modal-title-row">
+						<h2 class="modal-header" in:fly={{ y: 16, duration: 200 }}>
+							{formMode === 'create' ? 'Add New Item' : 'Edit Item'}
+						</h2>
+						<button type="button" class="btn-icon" onclick={handleCancel} aria-label="Close">
+							<i class="material-icons">close</i>
+						</button>
+					</div>
 					<form onsubmit={handleSubmit}>
-						<div class="form-field">
-							<label for="category">Category</label>
-							<select id="category" bind:value={formData.category} required>
-								{#each categories as category}
-									<option value={category}>{category}</option>
-								{/each}
-							</select>
-						</div>
-						<div class="form-field">
-							<label for="sku">SKU</label>
-							<input type="text" id="sku" bind:value={formData.sku} required readonly />
+						<p class="detail-section-title">Details</p>
+						<div class="form-row">
+							<div class="form-field">
+								<label for="category">Category</label>
+								<select id="category" bind:value={formData.category} required>
+									{#each categories as category}
+										<option value={category}>{category}</option>
+									{/each}
+								</select>
+							</div>
+							<div class="form-field">
+								<label for="sku">SKU</label>
+								<input type="text" id="sku" bind:value={formData.sku} required readonly />
+							</div>
 						</div>
 						<div class="form-field">
 							<label for="name">Name</label>
@@ -2192,7 +2307,20 @@
 							<textarea id="description" rows="3" bind:value={formData.description}></textarea>
 						</div>
 						<div class="form-field">
-							<div class="form-field-label">Photos</div>
+							<label for="barcode">Barcode</label>
+							<div class="input-container">
+								<input type="text" id="barcode" bind:value={formData.barcode} />
+								<button
+									type="button"
+									onclick={startBarcodeScanner}
+									class="btn-icon"
+									aria-label="Scan Barcode"><i class="material-icons">qr_code_scanner</i></button
+								>
+							</div>
+						</div>
+
+						<p class="detail-section-title">Photos</p>
+						<div class="form-field">
 							<div class="photo-gallery">
 								{#each formData.photos as photo, index}
 									<div class="thumbnail">
@@ -2231,22 +2359,16 @@
 								</label>
 							</div>
 						</div>
-						<div class="form-field">
-							<label for="barcode">Barcode</label>
-							<div class="input-container">
-								<input type="text" id="barcode" bind:value={formData.barcode} />
-								<button
-									type="button"
-									onclick={startBarcodeScanner}
-									class="btn-icon"
-									aria-label="Scan Barcode"><i class="material-icons">qr_code_scanner</i></button
-								>
-							</div>
+
+						<p class="detail-section-title">Status</p>
+						<div class="switch-field">
+							<label for="is_active" class="switch-label">Item is Active</label>
+							<label class="switch">
+								<input type="checkbox" id="is_active" bind:checked={formData.is_active} />
+								<span class="switch-track"></span>
+							</label>
 						</div>
-						<div class="checkbox-field">
-							<input type="checkbox" id="is_active" bind:checked={formData.is_active} />
-							<label for="is_active">Item is Active</label>
-						</div>
+
 						<div class="modal-actions">
 							<button type="button" onclick={handleCancel} class="btn btn-text">Cancel</button>
 							<button type="submit" class="btn btn-filled">Save Locally</button>
