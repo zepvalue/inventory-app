@@ -69,7 +69,7 @@
 	let selectedItem = $state<Item | null>(null);
 	let formData = $state<Item | null>(null);
 	let showMenu = $state(false);
-	let activeCategoryFilter = $state<string | null>(null);
+	let activeCategoryFilters = $state<string[]>([]);
 
 	// Groups the flat item list into category buckets purely to drive the
 	// filter chip bar (name, color, count per category) — items render as a
@@ -108,20 +108,28 @@
 	}
 	let categoryFilters = $derived(groupItemsByCategory(items));
 
-	// The flat list actually rendered: every item if no filter is active,
-	// otherwise only items in the selected category — always sorted
-	// alphabetically by name so the order stays predictable either way.
+	// The flat list actually rendered: every item if no filters are active,
+	// otherwise items matching ANY selected category (multi-select, not
+	// AND'd) — always sorted alphabetically by name so the order stays
+	// predictable either way.
 	let filteredItems = $derived(
-		(activeCategoryFilter
-			? items.filter((i) => (i.category?.trim() || 'Uncategorized') === activeCategoryFilter)
-			: items
+		(activeCategoryFilters.length === 0
+			? items
+			: items.filter((i) =>
+					activeCategoryFilters.includes(i.category?.trim() || 'Uncategorized')
+				)
 		)
 			.slice()
 			.sort((a, b) => a.name.localeCompare(b.name))
 	);
 
 	function toggleCategoryFilter(category: string) {
-		activeCategoryFilter = activeCategoryFilter === category ? null : category;
+		activeCategoryFilters = activeCategoryFilters.includes(category)
+			? activeCategoryFilters.filter((c) => c !== category)
+			: [...activeCategoryFilters, category];
+	}
+	function clearCategoryFilters() {
+		activeCategoryFilters = [];
 	}
 
 	// Reload the on-screen list from the local (offline-first) database.
@@ -1514,14 +1522,14 @@
 		{:else}
 			<div class="filter-bar">
 				<button
-					class="filter-chip {activeCategoryFilter === null ? 'active' : ''}"
-					onclick={() => (activeCategoryFilter = null)}
+					class="filter-chip {activeCategoryFilters.length === 0 ? 'active' : ''}"
+					onclick={clearCategoryFilters}
 				>
 					All <span class="filter-chip-count">{items.length}</span>
 				</button>
 				{#each categoryFilters as group (group.category)}
 					<button
-						class="filter-chip {activeCategoryFilter === group.category ? 'active' : ''}"
+						class="filter-chip {activeCategoryFilters.includes(group.category) ? 'active' : ''}"
 						style="--filter-color: {group.color}"
 						onclick={() => toggleCategoryFilter(group.category)}
 					>
@@ -1533,8 +1541,8 @@
 			{#if filteredItems.length === 0}
 				<div class="empty-state">
 					<i class="material-icons empty-state-icon">filter_alt_off</i>
-					<p class="empty-state-title">No items in this category</p>
-					<p class="empty-state-hint">Try a different filter.</p>
+					<p class="empty-state-title">No items match these filters</p>
+					<p class="empty-state-hint">Try selecting different categories.</p>
 				</div>
 			{:else}
 				<div class="items-list">
