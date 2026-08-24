@@ -1073,11 +1073,11 @@
 		}
 		.detail-hero {
 			position: relative;
-			height: 180px;
+			height: 170px;
 			background-color: var(--md-sys-color-surface-variant);
 			border-radius: 16px;
 			overflow: hidden;
-			margin-bottom: 12px;
+			margin-bottom: 14px;
 		}
 		.detail-hero-image {
 			width: 100%;
@@ -1109,7 +1109,7 @@
 		.detail-sku {
 			display: inline-flex;
 			align-items: center;
-			margin: 0 0 12px;
+			margin: 0 0 10px;
 			padding: 3px 10px;
 			border-radius: 8px;
 			background-color: var(--md-sys-color-surface-variant);
@@ -1124,43 +1124,39 @@
 			align-items: center;
 			flex-wrap: wrap;
 			gap: 8px;
-			margin-bottom: 18px;
+			margin-bottom: 20px;
 		}
 		.detail-sync-btn {
 			padding: 4px 12px;
 		}
-		.detail-card {
+		.detail-info {
 			background-color: var(--md-sys-color-surface-variant);
 			border-radius: 16px;
-			padding: 14px 16px;
-			margin-bottom: 12px;
-		}
-		.detail-card:last-child {
-			margin-bottom: 0;
-		}
-		.detail-card-header {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			margin-bottom: 8px;
-			color: var(--md-sys-color-on-surface-variant);
-		}
-		.detail-card-header .material-icons {
-			font-size: 18px;
-		}
-		.detail-card-header span {
-			font-size: 0.8125rem;
-			font-weight: 600;
+			padding: 0 16px;
+			margin-bottom: 20px;
 		}
 		.detail-info-row {
 			display: flex;
 			align-items: flex-start;
 			gap: 12px;
+			padding: 14px 0;
+		}
+		.detail-info-row + .detail-info-row {
+			border-top: 1px solid var(--md-sys-color-outline-variant);
 		}
 		.detail-info-row .material-icons {
 			font-size: 20px;
 			color: var(--md-sys-color-on-surface-variant);
 			margin-top: 1px;
+		}
+		.detail-section-title {
+			margin: 0 0 8px;
+			font-size: 0.75rem;
+			font-weight: 600;
+			color: var(--md-sys-color-on-surface-variant);
+		}
+		.detail-photos {
+			margin-bottom: 8px;
 		}
 		.detail-label {
 			margin: 0 0 2px;
@@ -1182,10 +1178,6 @@
 			line-height: 1.5;
 			color: var(--md-sys-color-on-surface);
 			white-space: pre-wrap;
-		}
-		.detail-value.detail-empty {
-			color: var(--md-sys-color-on-surface-variant);
-			font-style: italic;
 		}
 		.item-photo-preview,
 		.form-photo-preview {
@@ -1809,36 +1801,32 @@
 					{/if}
 				</div>
 
-				<div class="detail-card">
-					<div class="detail-card-header">
-						<i class="material-icons">notes</i>
-						<span>Description</span>
-					</div>
-					{#if viewingItem.description}
-						<p class="detail-value-description">{viewingItem.description}</p>
-					{:else}
-						<p class="detail-value detail-empty">No description</p>
-					{/if}
-				</div>
-
-				{#if viewingItem.barcode}
-					<div class="detail-card">
-						<div class="detail-info-row">
-							<i class="material-icons">qr_code_2</i>
-							<div>
-								<p class="detail-label">Barcode</p>
-								<p class="detail-value mono">{viewingItem.barcode}</p>
+				{#if viewingItem.description || viewingItem.barcode}
+					<div class="detail-info">
+						{#if viewingItem.description}
+							<div class="detail-info-row">
+								<i class="material-icons">notes</i>
+								<div>
+									<p class="detail-label">Description</p>
+									<p class="detail-value-description">{viewingItem.description}</p>
+								</div>
 							</div>
-						</div>
+						{/if}
+						{#if viewingItem.barcode}
+							<div class="detail-info-row">
+								<i class="material-icons">qr_code_2</i>
+								<div>
+									<p class="detail-label">Barcode</p>
+									<p class="detail-value mono">{viewingItem.barcode}</p>
+								</div>
+							</div>
+						{/if}
 					</div>
 				{/if}
 
 				{#if viewingItem.photos && viewingItem.photos.length > 0}
-					<div class="detail-card">
-						<div class="detail-card-header">
-							<i class="material-icons">photo_library</i>
-							<span>Photos</span>
-						</div>
+					<div class="detail-photos">
+						<p class="detail-section-title">Photos</p>
 						<div class="photo-gallery">
 							{#each viewingItem.photos as photo, i}
 								<div class="thumbnail">
