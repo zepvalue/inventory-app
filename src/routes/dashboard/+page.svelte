@@ -636,7 +636,7 @@
 			align-items: center;
 		}
 		main {
-			padding: 16px;
+			padding: 10px 14px;
 			flex-grow: 1;
 		}
 		.fab {
@@ -690,10 +690,10 @@
 		}
 		.item-card {
 			background-color: var(--md-sys-color-surface);
-			border-radius: 16px;
+			border-radius: 14px;
 			box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-			padding: 16px 18px;
-			margin-bottom: 10px;
+			padding: 10px 14px;
+			margin-bottom: 6px;
 			transition:
 				transform 200ms ease,
 				box-shadow 200ms ease;
@@ -709,15 +709,15 @@
 		.item-card-header {
 			display: flex;
 			justify-content: space-between;
-			align-items: flex-start;
+			align-items: center;
 			gap: 8px;
 		}
 		.item-card-heading {
 			min-width: 0;
 		}
 		.item-card-header h3 {
-			font-size: 1.125rem;
-			font-weight: 500;
+			font-size: 1rem;
+			font-weight: 600;
 			margin: 0;
 			overflow-wrap: break-word;
 		}
@@ -725,25 +725,29 @@
 			display: flex;
 			align-items: center;
 			gap: 6px;
-			margin: 2px 0 0;
-			font-size: 0.8125rem;
+			margin: 1px 0 0;
+			font-size: 0.75rem;
 			color: var(--md-sys-color-on-surface-variant);
 		}
 		.item-card-sku {
 			font-family: 'Roboto Mono', monospace;
-			font-size: 0.75rem;
+			font-size: 0.6875rem;
 		}
 		.item-card-dot {
 			opacity: 0.5;
 		}
 		.item-card-status {
-			margin-top: 10px;
+			margin-top: 6px;
 		}
 		.item-card-actions {
 			display: flex;
-			gap: 4px;
+			gap: 0;
 			flex-shrink: 0;
 			align-items: center;
+		}
+		.item-card-actions .btn-icon {
+			width: 34px;
+			height: 34px;
 		}
 		.item-photo-preview,
 		.form-photo-preview {
@@ -998,6 +1002,18 @@
 			gap: 8px;
 			margin-top: 8px;
 		}
+		.photo-gallery-compact {
+			gap: 6px;
+			margin-top: 6px;
+		}
+		.photo-gallery-compact .thumbnail {
+			width: 52px;
+			height: 52px;
+		}
+		.photo-gallery-compact .thumbnail .btn-icon {
+			width: 24px;
+			height: 24px;
+		}
 		.thumbnail {
 			position: relative;
 			width: 72px;
@@ -1200,7 +1216,7 @@
 						{/if}
 
 						{#if item.photos && item.photos.length > 0}
-							<div class="photo-gallery">
+							<div class="photo-gallery photo-gallery-compact">
 								{#each item.photos as photo, i}
 									<div class="thumbnail">
 										<img
